@@ -1,0 +1,168 @@
+<?php
+include('database/dbconnection.php');
+session_start();
+
+$error = '';
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $username = trim($_POST['username']);
+    $password = trim($_POST['password']);
+    $selected_role = trim($_POST['role']); // capture role input
+
+    if (empty($username) || empty($password) || empty($selected_role)) {
+        $error = "All fields are required.";
+    } else {
+        $stmt = $conn->prepare("SELECT username, password, role FROM users WHERE username = ?");
+        if ($stmt) {
+            $stmt->bind_param("s", $username);
+            $stmt->execute();
+            $result = $stmt->get_result();
+
+            if ($result->num_rows === 1) {
+                $user = $result->fetch_assoc();
+
+                // ✅ Match password (plain or hashed)
+                if (($password === $user['password'] || password_verify($password, $user['password'])) &&
+                    strtolower($selected_role) === strtolower($user['role'])) {
+
+                    $_SESSION['username'] = $user['username'];
+                    $_SESSION['role'] = strtolower($user['role']);
+
+                    // ✅ Redirect by role
+                    switch ($_SESSION['role']) {
+                        case 'admin':
+                            header("Location: pages/admin/AdminDashboard.php");
+                            break;
+                        case 'auditor':
+                            header("Location: pages/auditor/AuditorDashboard.php");
+                            break;
+                        case 'supervisor':
+                            header("Location: pages/supervisor/SupervisorDashboard.php");
+                            break;
+                        case 'data_analyst':
+                            header("Location: pages/data_analyst/DataAnalystDashboard.php");
+                            break;
+                        default:
+                            header("Location: dashboard.php");
+                            break;
+                    }
+                    exit();
+                } else {
+                    $error = "Invalid password or role.";
+                }
+            } else {
+                $error = "User not found.";
+            }
+            $stmt->close();
+        } else {
+            $error = "Database error: " . $conn->error;
+        }
+    }
+}
+?>
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+
+    <!-- External CSS -->
+    <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+    <main class="card" aria-label="Responsive Login Form">
+        <!-- Left Section: Welcome Message -->
+        <section class="hero">
+            <!-- unifyCX Logo -->
+            <div style="display: flex; justify-content: center; align-items: center; margin-bottom: 10px;">
+                <img src="assets/img/logo2.png" alt="unifyCX Logo" style="max-width: 160px; height: auto;">
+            </div>
+            <h1 style="color: #fff;">Welcome to <span style="color: #fff;">UnifyCX</span></h1>
+            <p style="font-size: 1.08rem; color: #fff; font-weight: 500; margin-top: 10px; text-align: left;">
+                At unifyCX, we empower your business with seamless auditing and analytics.<br>
+                Please log in to access your personalized dashboard and drive operational excellence.<br>
+                <span style="color: #fff; font-weight: 700;">Your experience, unified.</span>
+            </p>
+        </section>
+
+        <!-- Right Section: Login Form -->
+        <section class="panel">
+            <div class="decor">
+                <div class="circle-outline"></div>
+                <span class="dot one"></span>
+                <span class="dot two"></span>
+                <div class="corner-blob"></div>
+            </div>
+
+            <h2>Login</h2>
+            <form method="POST" action="">
+                <!-- Role Dropdown (moved above Username) -->
+                <div class="field" style="margin-bottom: 18px;">
+                    <select class="input casual-role-select" name="role" required style="
+                        background: #f7f7fa;
+                        border: 1.5px solid #bdbdbd;
+                        border-radius: 12px;
+                        padding: 12px 14px;
+                        font-size: 1.05rem;
+                        color: #444;
+                        font-family: 'Nunito Sans', sans-serif;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+                        outline: none;
+                        transition: border 0.2s;
+                        margin-bottom: 0;
+                    ">
+                        <option value="" disabled selected style="color:#aaa;">👤 Choose your role...</option>
+                        <option value="admin">🛡️ Administrator</option>
+                        <option value="auditor">🔍 Auditor</option>
+                        <option value="supervisor">👔 Supervisor</option>
+                        <option value="data_analyst">📊 Data Analyst</option>
+                    </select>
+                </div>
+
+                <!-- Username -->
+                <div class="field" style="margin-bottom: 18px;">
+                    <input type="text" class="input" name="username" placeholder="Username" required>
+                </div>
+
+                <!-- Password -->
+                <div class="field">
+                    <input type="password" class="input" id="password" name="password" placeholder="Password" required>
+                </div>
+
+                <!-- Show Password Checkbox -->
+                <div class="row-between">
+                    <label class="show-password" style="font-size: 13px; color: #6b6b6b;">
+                        <input type="checkbox" id="showPassword" onclick="togglePassword()">
+                        <span>Show Password</span>
+                    </label>
+                </div>
+
+                <!-- Error Message -->
+                <?php if (!empty($error)): ?>
+                    <p style="color: red; text-align: center; margin-bottom: 10px;">
+                        <?php echo $error; ?>
+                    </p>
+                <?php endif; ?>
+
+                <!-- Submit Button -->
+                <button class="btn" type="submit">Login</button>
+            </form>
+        </section>
+    </main>
+
+    <script>
+        // Toggle Password Visibility
+        function togglePassword() {
+            var pass = document.getElementById("password");
+            pass.type = (pass.type === "password") ? "text" : "password";
+        }
+    </script>
+</body>
+</html>
