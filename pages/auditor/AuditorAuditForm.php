@@ -367,7 +367,7 @@ $agents_result = mysqli_query($conn, $agents_query);
                         <select name="reviewer_name" required>
                             <option value=""> Select Reviewer</option>
                             <?php while ($row = mysqli_fetch_assoc($auditors_result)) : 
-                                $fullname = $row['auditor_firstname'] . " " . $row['auditor_lasttname']; ?>
+                                $fullname = $row['auditor_firstname'] . " " . $row['auditor_lastname']; ?>
                                 <option value="<?php echo htmlspecialchars($fullname); ?>"><?php echo htmlspecialchars($fullname); ?></option>
                             <?php endwhile; ?>
                         </select>
@@ -378,7 +378,7 @@ $agents_result = mysqli_query($conn, $agents_query);
                         <select name="agent_name" required>
                             <option value=""> Select Agent</option>
                             <?php while ($row = mysqli_fetch_assoc($agents_result)) : 
-                                $fullname = $row['agent_firsttname'] . " " . $row['agent_lastname']; ?>
+                                $fullname = $row['agent_firstname'] . " " . $row['agent_lastname']; ?>
                                 <option value="<?php echo htmlspecialchars($fullname); ?>"><?php echo htmlspecialchars($fullname); ?></option>
                             <?php endwhile; ?>
                         </select>

@@ -4,55 +4,58 @@ session_start();
 
 $error = '';
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username']);
     $password = trim($_POST['password']);
-    $selected_role = trim($_POST['role']); // capture role input
+    $selected_role = trim($_POST['role']); // selected role from dropdown
 
     if (empty($username) || empty($password) || empty($selected_role)) {
         $error = "All fields are required.";
     } else {
-        $stmt = $conn->prepare("SELECT username, password, role FROM users WHERE username = ?");
+        // Use prepared statement for security
+        $stmt = $conn->prepare("SELECT * FROM users WHERE username = ?");
         if ($stmt) {
             $stmt->bind_param("s", $username);
             $stmt->execute();
             $result = $stmt->get_result();
 
-            if ($result->num_rows === 1) {
+            if ($result && $result->num_rows === 1) {
                 $user = $result->fetch_assoc();
 
-                // ✅ Match password (plain or hashed)
-                if (($password === $user['password'] || password_verify($password, $user['password'])) &&
-                    strtolower($selected_role) === strtolower($user['role'])) {
+                // Verify password (plain or hashed)
+                $validPassword = ($password === $user['password'] || password_verify($password, $user['password']));
+                $validRole = strtolower($selected_role) === strtolower($user['role']);
 
+                if ($validPassword && $validRole) {
+                    // ✅ Set session variables consistently
                     $_SESSION['username'] = $user['username'];
-                    $_SESSION['role'] = strtolower($user['role']);
+                    $_SESSION['user_role'] = strtolower($user['role']);
 
-                    // ✅ Redirect by role
-                    switch ($_SESSION['role']) {
+                    // ✅ Redirect user to proper dashboard
+                    switch ($_SESSION['user_role']) {
                         case 'admin':
                             header("Location: pages/admin/AdminDashboard.php");
-                            break;
+                            exit;
                         case 'auditor':
                             header("Location: pages/auditor/AuditorDashboard.php");
-                            break;
+                            exit;
                         case 'supervisor':
                             header("Location: pages/supervisor/SupervisorDashboard.php");
-                            break;
+                            exit;
                         case 'data_analyst':
                             header("Location: pages/data_analyst/DataAnalystDashboard.php");
-                            break;
+                            exit;
                         default:
-                            header("Location: dashboard.php");
+                            $error = "Unknown role detected.";
                             break;
                     }
-                    exit();
                 } else {
                     $error = "Invalid password or role.";
                 }
             } else {
                 $error = "User not found.";
             }
+
             $stmt->close();
         } else {
             $error = "Database error: " . $conn->error;
@@ -60,7 +63,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     }
 }
 ?>
-
 
 <!DOCTYPE html>
 <html lang="en">

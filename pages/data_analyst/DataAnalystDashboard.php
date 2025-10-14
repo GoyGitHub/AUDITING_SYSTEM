@@ -1,10 +1,53 @@
 <?php
-include('../../repositories/DataAnalystAuthentications.php');  // ✅ Enforces login
-requireDataAnalyst();                      // ✅ Only admins
+// ✅ Start session safely
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}                  
 include('../../database/dbconnection.php');
+
+
+// ✅ Pull data from session
+$username = $_SESSION['username'] ?? 'User';
+$rawRole = $_SESSION['user_role'] ?? 'User';
+
+// ✅ Map and format roles
+$roleMap = [
+    'data_analyst'        => 'Data Analyst',
+
+];
+
+
+// ✅ Use mapped role if it exists; otherwise, format automatically
+if (isset($roleMap[strtolower($rawRole)])) {
+    $role = $roleMap[strtolower($rawRole)];
+} else {
+    // Auto-format: convert underscores to spaces and capitalize words
+    $role = ucwords(str_replace('_', ' ', strtolower($rawRole)));
+}
+
+// ✅ Display name
+$displayName = ucfirst($username) . '.';
+
+// Dashboard summary counts
+function getCount($conn, $table) {
+    $result = $conn->query("SELECT COUNT(*) as cnt FROM $table");
+    return $result ? $result->fetch_assoc()['cnt'] : 0;
+}
+$dataReportCount = getCount($conn, 'data_reports');
+$agentCount = getCount($conn, 'agents');
+$supervisorCount = getCount($conn, 'supervisors');
+$coachingCount = getCount($conn, 'coaching_sessions');
+
+// Fetch recent data reports
+$recentReports = [];
+$reportQuery = "SELECT * FROM data_reports ORDER BY created_at DESC LIMIT 5";
+$reportResult = $conn->query($reportQuery);
+if ($reportResult && $reportResult->num_rows > 0) {
+    while ($row = $reportResult->fetch_assoc()) {
+        $recentReports[] = $row;
+    }
+}
 ?>
-
-
 
 <!DOCTYPE html>
 <html lang="en">
@@ -18,7 +61,7 @@ include('../../database/dbconnection.php');
    <!--=============== CSS ===============-->
    <link rel="stylesheet" href="../../assets/css/styles.css">
 
-   <title>Dashboard | Cool Pals</title>
+   <title>Data Analyst Dashboard | Cool Pals</title>
    <style>
       .dashboard-article {
          padding: 2rem;
@@ -42,15 +85,49 @@ include('../../database/dbconnection.php');
          margin-bottom: 1.5rem;
       }
 
+      .dashboard-summary {
+         display: grid;
+         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+         gap: 2rem;
+         margin-bottom: 2.5rem;
+      }
+
+      .summary-card {
+         background: #f5f8fa;
+         border-radius: 1rem;
+         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+         padding: 2rem 1.5rem;
+         text-align: center;
+      }
+
+      .summary-card h3 {
+         font-size: 1.1rem;
+         color: #003366;
+         margin-bottom: 0.7rem;
+      }
+
+      .summary-card .count {
+         font-size: 2.2rem;
+         font-weight: bold;
+         color: #0055aa;
+         margin-bottom: 0.5rem;
+      }
+
+      .summary-card .icon {
+         font-size: 2rem;
+         color: #003366;
+         margin-bottom: 0.5rem;
+      }
+
       .dashboard-buttons {
          display: flex;
          flex-wrap: wrap;
          gap: 1.7rem;
-         margin-top: 1rem;
+         margin-top: 1.5rem;
       }
 
       .dashboard-buttons a {
-         padding: 2.5rem 6.5rem;
+         padding: 1.2rem 2.5rem;
          background-color: #003366;
          color: #fff;
          text-decoration: none;
@@ -59,6 +136,7 @@ include('../../database/dbconnection.php');
          display: inline-flex;
          align-items: center;
          gap: 0.5rem;
+         font-size: 1rem;
       }
 
       .dashboard-buttons a:hover {
@@ -69,57 +147,52 @@ include('../../database/dbconnection.php');
          font-size: 1.2rem;
       }
 
-      /* Slideshow Styles */
-      .slideshow-container {
-         position: relative;
-         max-width: 100%;   /* smaller size */
-         height: 550px;    /* fixed height */
-         margin: 20px auto;
-         border-radius: 1rem;
-         overflow: hidden;
-         box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-      }
-
-      .slide {
-         display: none;
-         height: 100%;
-      }
-
-      .slide img {
+      .recent-reports-table {
          width: 100%;
-         height: 100%;
-         object-fit: cover;
+         border-collapse: collapse;
+         margin-top: 2.5rem;
+         background: #fff;
          border-radius: 1rem;
+         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
       }
 
-      .fade {
-         animation: fadeEffect 1.5s;
+      .recent-reports-table th, .recent-reports-table td {
+         padding: 0.8rem 1rem;
+         border-bottom: 1px solid #eee;
+         text-align: left;
+         font-size: 1rem;
       }
 
-      @keyframes fadeEffect {
-         from {opacity: 0.4}
-         to {opacity: 1}
+      .recent-reports-table th {
+         background: #f5f8fa;
+         color: #003366;
+         font-weight: 600;
       }
 
-      /* Dots (Indicators) */
-      .dots {
-         text-align: center;
-         margin-top: 10px;
+      .recent-reports-table tr:last-child td {
+         border-bottom: none;
       }
 
-      .dot {
-         height: 12px;
-         width: 12px;
-         margin: 0 4px;
-         background-color: #bbb;
-         border-radius: 50%;
-         display: inline-block;
-         transition: background-color 0.3s;
-         cursor: pointer;
+      .quick-actions {
+         margin-top: 2.5rem;
+         display: flex;
+         gap: 1.5rem;
+         flex-wrap: wrap;
       }
 
-      .active-dot {
-         background-color: #003366;
+      .quick-actions a {
+         background: #eaf1fb;
+         color: #003366;
+         padding: 1rem 2rem;
+         border-radius: 0.7rem;
+         text-decoration: none;
+         font-weight: 500;
+         box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+         transition: background 0.2s;
+      }
+
+      .quick-actions a:hover {
+         background: #d0e2ff;
       }
    </style>
 </head>
@@ -137,21 +210,19 @@ include('../../database/dbconnection.php');
    </div>
 </header>
 
-   <!--=============== SIDEBAR ===============-->
-   <nav class="sidebar" id="sidebar">
-      <div class="sidebar__container">
-         <div class="sidebar__user">
+<!--=============== SIDEBAR ===============-->
+<nav class="sidebar" id="sidebar">
+    <div class="sidebar__container">
+        <div class="sidebar__user">
             <div class="sidebar__img">
-               <img src="../../assets/img/perfil.png" alt="image">
+                <img src="../../assets/img/perfil.png" alt="image">
             </div>
-
-            <div class="sidebar__info">
-               <h3>Jhayvot G.</h3>
-               <span>Administrator</span>
-            </div>
-         </div>
-
-         <div class="sidebar__content">
+                  <div class="sidebar__info">
+                        <h3><?php echo htmlspecialchars($displayName); ?></h3>
+                        <span><?php echo htmlspecialchars($role); ?></span>
+                </div>
+        </div>
+        <div class="sidebar__content">
             <div>
                 <h3 class="sidebar__title">MANAGE</h3>
                 <div class="sidebar__list">
@@ -167,121 +238,113 @@ include('../../database/dbconnection.php');
                         <i class="ri-settings-3-fill"></i>
                         <span>UCX Analytics</span>
                     </a>
-                    <a href="DataAnalystHrRecords.php" class="sidebar__link">
-                        <i class="ri-folder-history-fill"></i>
-                        <span>HR Records</span>
+                                   <a href="DataAnalystConductCoach.php" class="sidebar__link">
+                  <i class="ri-ubuntu-fill"></i>
+                  <span>UCX Connect</span>
+               </a>
+                </div>
+            </div>
+            <div>
+                <h3 class="sidebar__title">TOOLS</h3>
+                <div class="sidebar__list">
+                    <a href="#" class="sidebar__link">
+                        <i class="ri-mail-unread-fill"></i>
+                        <span>My Messages</span>
+                    </a>
+                    <a href="#" class="sidebar__link">
+                        <i class="ri-notification-2-fill"></i>
+                        <span>Notifications</span>
                     </a>
                 </div>
-
-                </div>
-            <div>
-               <h3 class="sidebar__title">TOOLS</h3>
-               <div class="sidebar__list">
-                  <a href="#" class="sidebar__link">
-                     <i class="ri-mail-unread-fill"></i>
-                     <span>My Messages</span>
-                  </a>
-                  <a href="#" class="sidebar__link">
-                     <i class="ri-notification-2-fill"></i>
-                     <span>Notifications</span>
-                  </a>
-               </div>
             </div>
-         </div>
-
-         <div class="sidebar__actions">
+        </div>
+        <div class="sidebar__actions">
             <button>
-               <i class="ri-moon-clear-fill sidebar__link sidebar__theme" id="theme-button">
-                  <span>Theme</span>
-               </i>
+                <i class="ri-moon-clear-fill sidebar__link sidebar__theme" id="theme-button">
+                    <span>Theme</span>
+                </i>
             </button>
             <a href="../../LoginFunction.php" class="sidebar__link">
-               <i class="ri-logout-box-r-fill"></i>
-               <span>Log Out</span>
+                <i class="ri-logout-box-r-fill"></i>
+                <span>Log Out</span>
             </a>
-         </div>
-      </div>
-   </nav>
+        </div>
+    </div>
+</nav>
 
    <!--=============== MAIN ===============-->
    <main class="main container" id="main">
       <section class="dashboard-article">
-         <h2>Welcome to UCX Overview</h2>
-
-         <!-- Slideshow Section -->
-         <div class="slideshow-container">
-            <div class="slide fade">
-               <img src="../../assets/img/1.jfif" alt="Slideshow Image 1">
+         <h2>Data Analyst Dashboard</h2>
+         <p>
+            Welcome! Here you can quickly review key metrics, access recent reports, and perform common analyst actions.
+         </p>
+         <!-- Dashboard Summary Section -->
+         <div class="dashboard-summary">
+            <div class="summary-card">
+                <div class="icon"><i class="ri-bar-chart-box-fill"></i></div>
+                <div class="count"><?php echo $dataReportCount; ?></div>
+                <h3>Data Reports</h3>
             </div>
-            <div class="slide fade">
-               <img src="../../assets/img/2.jfif" alt="Slideshow Image 2">
+            <div class="summary-card">
+                <div class="icon"><i class="ri-user-2-fill"></i></div>
+                <div class="count"><?php echo $agentCount; ?></div>
+                <h3>Agents</h3>
             </div>
-            <div class="slide fade">
-               <img src="../../assets/img/3.jfif" alt="Slideshow Image 3">
+            <div class="summary-card">
+                <div class="icon"><i class="ri-user-star-fill"></i></div>
+                <div class="count"><?php echo $supervisorCount; ?></div>
+                <h3>Supervisors</h3>
+            </div>
+            <div class="summary-card">
+                <div class="icon"><i class="ri-ubuntu-fill"></i></div>
+                <div class="count"><?php echo $coachingCount; ?></div>
+                <h3>Coaching Sessions</h3>
             </div>
          </div>
 
-         <!-- Dots (Indicators) -->
-         <div class="dots">
-            <span class="dot" onclick="currentSlide(1)"></span>
-            <span class="dot" onclick="currentSlide(2)"></span>
-            <span class="dot" onclick="currentSlide(3)"></span>
+         <!-- Quick Actions -->
+         <div class="quick-actions">
+            <a href="DataAnalystAuditDatabank.php"><i class="ri-database-2-fill"></i> View Data Bank</a>
+            <a href="DataAnalystAnalytics.php"><i class="ri-bar-chart-grouped-fill"></i> Analytics Tools</a>
+            <a href="DataAnalystHrRecords.php"><i class="ri-folder-history-fill"></i> HR Records</a>
+            <a href="DataAnalystAddReport.php"><i class="ri-add-circle-fill"></i> Add New Report</a>
          </div>
 
-         <!-- Buttons under slideshow -->
-         <div class="dashboard-buttons">
-            <a href="AuditDatabank.php">
-               <i class="ri-wallet-3-fill"></i> UCX Data Bank
-            </a>
-            <a href="#">
-               <i class="ri-calendar-fill"></i> UCX Connect
-            </a>
-            <a href="AuditForm.php">
-               <i class="ri-arrow-up-down-line"></i> Unify Audit System
-            </a>
-            <a href="HrRecords.php">
-               <i class="ri-bar-chart-box-fill"></i> HR Records
-            </a>
-         </div>
+         <!-- Recent Data Reports Table -->
+         <h2 style="margin-top:2.5rem;">Recent Data Reports</h2>
+         <table class="recent-reports-table">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Reviewer</th>
+                    <th>Agent</th>
+                    <th>Status</th>
+                    <th>Comment</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (count($recentReports)): ?>
+                    <?php foreach ($recentReports as $report): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($report['date']); ?></td>
+                            <td><?php echo htmlspecialchars($report['reviewer_name']); ?></td>
+                            <td><?php echo htmlspecialchars($report['agent_name']); ?></td>
+                            <td><?php echo htmlspecialchars($report['status']); ?></td>
+                            <td><?php echo htmlspecialchars($report['comment']); ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="5" style="text-align:center;">No recent reports found.</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+         </table>
       </section>
    </main>
    
    <!--=============== MAIN JS ===============-->
    <script src="../../assets/js/main.js"></script>
-
-   <!-- Slideshow JS -->
-   <script>
-      let slideIndex = 0;
-      let autoSlideTimeout;
-
-      function showSlides() {
-         let slides = document.getElementsByClassName("slide");
-         let dots = document.getElementsByClassName("dot");
-
-         for (let i = 0; i < slides.length; i++) {
-            slides[i].style.display = "none";  
-         }
-         slideIndex++;
-         if (slideIndex > slides.length) {slideIndex = 1}
-
-         for (let i = 0; i < dots.length; i++) {
-            dots[i].classList.remove("active-dot");
-         }
-
-         slides[slideIndex-1].style.display = "block";  
-         dots[slideIndex-1].classList.add("active-dot");
-
-         autoSlideTimeout = setTimeout(showSlides, 5000); // Auto slide
-      }
-
-      function currentSlide(n) {
-         clearTimeout(autoSlideTimeout);
-         slideIndex = n - 1;
-         showSlides();
-      }
-
-      // Start slideshow
-      showSlides();
-   </script>
 </body>
 </html>
