@@ -154,8 +154,7 @@ $displayName = ucfirst($username) . '.';
             <div class="sidebar__img">
                <img src="../../assets/img/perfil.png" alt="image">
             </div>
-
-                                <div class="sidebar__info">
+                  <div class="sidebar__info">
                         <h3><?php echo htmlspecialchars($displayName); ?></h3>
                         <span><?php echo htmlspecialchars($role); ?></span>
                 </div>

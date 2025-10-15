@@ -39,10 +39,10 @@ if (isset($_POST['add_person'])) {
         $error = validate_fields($fields);
 
         if (!$error) {
-            $stmt = $conn->prepare("INSERT INTO agents (agent_firsttname, agent_lastname, birthday, email, team) VALUES (?, ?, ?, ?, ?)");
+            $stmt = $conn->prepare("INSERT INTO agents2 (agent_firstname, agent_lastname, birthday, email, team) VALUES (?, ?, ?, ?, ?)");
             $stmt->bind_param(
                 "sssss",
-                $_POST['agent_firstname'], // mapped to DB column agent_firsttname
+                $_POST['agent_firstname'],
                 $_POST['agent_lastname'],
                 $_POST['agent_birthday'],
                 $_POST['agent_email'],
@@ -62,7 +62,7 @@ if (isset($_POST['add_person'])) {
         $error = validate_fields($fields);
 
         if (!$error) {
-            $stmt = $conn->prepare("INSERT INTO auditors2 (auditor_firstname, auditor_lasttname, birthday, email, department) VALUES (?, ?, ?, ?, ?)");
+            $stmt = $conn->prepare("INSERT INTO auditors (auditor_firstname, auditor_lastname, birthday, email, department) VALUES (?, ?, ?, ?, ?)");
             $stmt->bind_param(
                 "sssss",
                 $_POST['auditor_firstname'],
@@ -142,7 +142,7 @@ function getCount($conn, $table) {
     $result = $conn->query("SELECT COUNT(*) as cnt FROM $table");
     return $result ? $result->fetch_assoc()['cnt'] : 0;
 }
-$agentCount = getCount($conn, 'agents');
+$agentCount = getCount($conn, 'agents2');
 $auditorCount = getCount($conn, 'auditors2');
 $supervisorCount = getCount($conn, 'supervisors');
 $dataAnalystCount = getCount($conn, 'data_analysts');
@@ -198,7 +198,7 @@ $accountCount = getCount($conn, 'users');
 }
 
 .dashboard-buttons a {
-    padding: 2.5rem 7rem;
+    padding: 2.5rem 6.5rem;
     background-color: #003366;
     color: #fff;
     text-decoration: none;

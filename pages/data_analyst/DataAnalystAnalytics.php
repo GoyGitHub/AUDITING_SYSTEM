@@ -70,7 +70,7 @@ if ($topAgentResult && $topAgentResult->num_rows > 0) {
 // Summary cards
 $totalAudits = $conn->query("SELECT COUNT(*) as cnt FROM data_reports")->fetch_assoc()['cnt'] ?? 0;
 $totalCoaching = $conn->query("SELECT COUNT(*) as cnt FROM coaching_sessions")->fetch_assoc()['cnt'] ?? 0;
-$agentCount = $conn->query("SELECT COUNT(*) as cnt FROM agents")->fetch_assoc()['cnt'] ?? 1;
+$agentCount = $conn->query("SELECT COUNT(*) as cnt FROM agents2")->fetch_assoc()['cnt'] ?? 1;
 $avgAuditsPerAgent = $agentCount ? round($totalAudits / $agentCount, 2) : 0;
 ?>
 
