@@ -16,7 +16,7 @@ $auditors_query = "SELECT id, auditor_firstname, auditor_lastname FROM auditors2
 $auditors_result = mysqli_query($conn, $auditors_query);
 
 // Agents list
-$agents_query = "SELECT id, agent_firstname, agent_lastname FROM agents";
+$agents_query = "SELECT id, agent_firstname, agent_lastname FROM agents2";
 $agents_result = mysqli_query($conn, $agents_query);
 ?>
 
