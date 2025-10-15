@@ -62,7 +62,7 @@ if (isset($_POST['add_person'])) {
         $error = validate_fields($fields);
 
         if (!$error) {
-            $stmt = $conn->prepare("INSERT INTO auditors (auditor_firstname, auditor_lastname, birthday, email, department) VALUES (?, ?, ?, ?, ?)");
+            $stmt = $conn->prepare("INSERT INTO auditors2 (auditor_firstname, auditor_lastname, birthday, email, department) VALUES (?, ?, ?, ?, ?)");
             $stmt->bind_param(
                 "sssss",
                 $_POST['auditor_firstname'],

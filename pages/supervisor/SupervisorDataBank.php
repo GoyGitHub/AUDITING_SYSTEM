@@ -1,34 +1,17 @@
 <?php 
 include('../../database/dbconnection.php'); 
 
-// ✅ Start session safely
+// ✅ Load session user details safely
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ✅ Pull data from session
+// Pull data from session
 $username = $_SESSION['username'] ?? 'User';
-$rawRole = $_SESSION['user_role'] ?? 'User';
-
-// ✅ Map and format roles
-$roleMap = [
-    'data_analyst'        => 'Data Analyst',
-
-];
-
-
-// ✅ Use mapped role if it exists; otherwise, format automatically
-if (isset($roleMap[strtolower($rawRole)])) {
-    $role = $roleMap[strtolower($rawRole)];
-} else {
-    // Auto-format: convert underscores to spaces and capitalize words
-    $role = ucwords(str_replace('_', ' ', strtolower($rawRole)));
-}
-
-// ✅ Display name
+$role = ucfirst($_SESSION['user_role'] ?? 'User');
 $displayName = ucfirst($username) . '.';
-?>
 
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -294,65 +277,66 @@ $displayName = ucfirst($username) . '.';
 
 <!--=============== SIDEBAR ===============-->
 <nav class="sidebar" id="sidebar">
-    <div class="sidebar__container">
-        <div class="sidebar__user">
-            <div class="sidebar__img">
-                <img src="../../assets/img/perfil.png" alt="image">
-            </div>
+   <div class="sidebar__container">
+      <div class="sidebar__user">
+         <div class="sidebar__img">
+            <img src="../../assets/img/perfil.png" alt="image">
+         </div>
                   <div class="sidebar__info">
                         <h3><?php echo htmlspecialchars($displayName); ?></h3>
                         <span><?php echo htmlspecialchars($role); ?></span>
                 </div>
-        </div>
-        <div class="sidebar__content">
-            <div>
-                <h3 class="sidebar__title">MANAGE</h3>
-                <div class="sidebar__list">
-                    <a href="DataAnalystDashboard.php" class="sidebar__link">
-                        <i class="ri-dashboard-horizontal-fill"></i>
-                        <span>Dashboard</span>
-                    </a>
-                    <a href="DataAnalystAuditDatabank.php" class="sidebar__link active-link">
-                        <i class="ri-database-fill"></i>
-                        <span>UCX Data Bank</span>
-                    </a>
-                    <a href="DataAnalystAnalytics.php" class="sidebar__link">
-                        <i class="ri-settings-3-fill"></i>
-                        <span>UCX Analytics</span>
-                    </a>
-                                   <a href="DataAnalystConductCoach.php" class="sidebar__link">
+      </div>
+
+      <div class="sidebar__content">
+         <div>
+            <h3 class="sidebar__title">MANAGE</h3>
+            <div class="sidebar__list">
+               <a href="SupervisorDashboard.php" class="sidebar__link">
+                  <i class="ri-dashboard-horizontal-fill"></i>
+                  <span>Dashboard</span>
+               </a>
+
+               <a href="SupervisorDatabank.php" class="sidebar__link active-link">
+                  <i class="ri-database-fill"></i>
+                  <span>UCX Data Bank</span>
+               </a>
+
+               <a href="SupervisorConductCoach.php" class="sidebar__link">
                   <i class="ri-ubuntu-fill"></i>
                   <span>UCX Connect</span>
                </a>
-                </div>
             </div>
-            <div>
-                <h3 class="sidebar__title">TOOLS</h3>
-                <div class="sidebar__list">
-                    <a href="#" class="sidebar__link">
-                        <i class="ri-mail-unread-fill"></i>
-                        <span>My Messages</span>
-                    </a>
-                    <a href="#" class="sidebar__link">
-                        <i class="ri-notification-2-fill"></i>
-                        <span>Notifications</span>
-                    </a>
-                </div>
+         </div>
+
+         <div>
+            <h3 class="sidebar__title">TOOLS</h3>
+            <div class="sidebar__list">
+               <a href="#" class="sidebar__link">
+                  <i class="ri-mail-unread-fill"></i>
+                  <span>My Messages</span>
+               </a>
+               <a href="#" class="sidebar__link">
+                  <i class="ri-notification-2-fill"></i>
+                  <span>Notifications</span>
+               </a>
             </div>
-        </div>
-        <div class="sidebar__actions">
+         </div>
+      </div>
+
+         <div class="sidebar__actions">
             <button>
-                <i class="ri-moon-clear-fill sidebar__link sidebar__theme" id="theme-button">
-                    <span>Theme</span>
-                </i>
+               <i class="ri-moon-clear-fill sidebar__link sidebar__theme" id="theme-button">
+                  <span>Theme</span>
+               </i>
             </button>
             <a href="../../LoginFunction.php" class="sidebar__link">
-                <i class="ri-logout-box-r-fill"></i>
-                <span>Log Out</span>
+               <i class="ri-logout-box-r-fill"></i>
+               <span>Log Out</span>
             </a>
-        </div>
-    </div>
-</nav>
+         </div>
+      </div>
+   </nav>
 <!--=============== MAIN CONTENT ===============-->
 <main class="main container" id="main">
    <h1 style="margin-bottom: 20px; font-family:'Nunito Sans', sans-serif; color:#0d1b3d;">Audit Reports</h1>
@@ -430,11 +414,6 @@ if ($result->num_rows > 0) {
             <div class="audit-header-info">
                <label>Account #:</label> <?php echo htmlspecialchars($row['account_number']); ?>
             </div>
-            <!-- Delete button stays at the top right -->
-            <div class="audit-actions">
-               <a href='../../conditions/delete.php?id=<?php echo $row['id']; ?>'
-                  onclick="return confirm('Are you sure you want to delete this record?');">Delete</a>
-            </div>
          </div>
          <!-- Hide Queue when collapsed, show only when expanded -->
          <div class="audit-meta" style="display:none;"></div>
@@ -463,20 +442,6 @@ if ($result->num_rows > 0) {
          </table>
          <div class="audit-comments">
             <strong>Comments:</strong> <?php echo htmlspecialchars($row['comment']); ?>
-            <?php
-            // Show supervisor comments for this audit
-            $supComRes = $conn->query("SELECT comment, status, created_at FROM supervisor_comments WHERE audit_id=" . intval($row['id']));
-            if ($supComRes && $supComRes->num_rows > 0) {
-                while ($sc = $supComRes->fetch_assoc()) {
-                    $statusColor = $sc['status'] === 'approved' ? '#43a047' : ($sc['status'] === 'disapproved' ? '#e53935' : '#ffa000');
-                    echo "<div style='margin-top:0.7rem; background:#fffbe7; border-radius:0.5rem; padding:0.6rem 1rem; font-size:0.98rem;'>
-                        <strong>Supervisor:</strong> " . htmlspecialchars($sc['comment']) . "
-                        <span style='margin-left:1rem; color:$statusColor; font-weight:600;'>[" . ucfirst($sc['status']) . "]</span>
-                        <span style='margin-left:1rem; color:#888; font-size:0.95rem;'>" . htmlspecialchars($sc['created_at']) . "</span>
-                    </div>";
-                }
-            }
-            ?>
          </div>
       </div>
 <?php

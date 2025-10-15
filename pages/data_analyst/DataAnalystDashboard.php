@@ -307,8 +307,7 @@ if ($reportResult && $reportResult->num_rows > 0) {
          <div class="quick-actions">
             <a href="DataAnalystAuditDatabank.php"><i class="ri-database-2-fill"></i> View Data Bank</a>
             <a href="DataAnalystAnalytics.php"><i class="ri-bar-chart-grouped-fill"></i> Analytics Tools</a>
-            <a href="DataAnalystHrRecords.php"><i class="ri-folder-history-fill"></i> HR Records</a>
-            <a href="DataAnalystAddReport.php"><i class="ri-add-circle-fill"></i> Add New Report</a>
+            <a href="DataAnalystNewReport.php"><i class="ri-add-circle-fill"></i> Add New Report</a>
          </div>
 
          <!-- Recent Data Reports Table -->

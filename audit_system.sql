@@ -3,9 +3,9 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Oct 13, 2025 at 05:08 AM
+-- Generation Time: Oct 15, 2025 at 10:38 AM
 -- Server version: 10.4.32-MariaDB
--- PHP Version: 8.2.12
+-- PHP Version: 8.0.30
 
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
 START TRANSACTION;
@@ -24,43 +24,52 @@ SET time_zone = "+00:00";
 -- --------------------------------------------------------
 
 --
--- Table structure for table `admin_logs`
+-- Table structure for table `agents2`
 --
 
-CREATE TABLE `admin_logs` (
+CREATE TABLE `agents2` (
   `id` int(11) NOT NULL,
-  `admin_id` int(11) NOT NULL,
-  `action` varchar(255) NOT NULL,
-  `target_table` varchar(100) NOT NULL,
-  `target_id` int(11) NOT NULL,
-  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
--- --------------------------------------------------------
-
---
--- Table structure for table `agents`
---
-
-CREATE TABLE `agents` (
-  `id` int(11) NOT NULL,
+  `agent_firstname` varchar(100) NOT NULL,
   `agent_lastname` varchar(100) NOT NULL,
-  `agent_firsttname` varchar(100) NOT NULL,
-  `birthday` date DEFAULT NULL,
-  `email` varchar(150) DEFAULT NULL,
+  `birthday` date NOT NULL,
+  `email` varchar(150) NOT NULL,
   `team` varchar(100) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `agents`
+-- Dumping data for table `agents2`
 --
 
-INSERT INTO `agents` (`id`, `agent_lastname`, `agent_firsttname`, `birthday`, `email`, `team`) VALUES
-(1, 'Gonzaga', 'Alex', '1995-01-10', 'alex.gonzaga@yahoo.com', 'Sales'),
-(2, 'Langot', 'Coco', '1992-09-18', 'coco.langot@gmail.com', 'Support'),
-(3, 'Brozo', 'Nel Andrew', '2004-12-11', 'brozoandrewm@collectivesolution.com', 'Team Yey'),
-(8, 'Puwitan', 'Daril', '2015-12-15', 'tanga@collectivesolution.com', 'Team Bravo'),
-(10, 'De luna', 'Matt', '2004-12-11', 'mattdeluna@gmail.com', 'Team Alpha');
+INSERT INTO `agents2` (`id`, `agent_firstname`, `agent_lastname`, `birthday`, `email`, `team`) VALUES
+(1, 'Joy', 'Bilmunte', '2025-10-10', 'joybilmunte@gmail.com', 'Team Bravo'),
+(2, 'BongBong', 'Marcos', '2025-10-24', 'bongbongmarcos@gmail.com', 'Team Charlie'),
+(3, 'Alex', 'Gonzaga', '2025-10-05', 'alexgonsaga@gmail.com', 'Team Alpha'),
+(4, 'Alex', 'Belmonte', '2025-10-14', 'joybilmunte@gmail.com', 'Team Alpha'),
+(5, 'Alex', 'Belmonte', '2025-10-14', 'joybilmunte@gmail.com', 'Team Alpha'),
+(6, 'Alex', 'Belmonte', '2025-10-14', 'joybilmunte@gmail.com', 'Team Alpha');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `auditors`
+--
+
+CREATE TABLE `auditors` (
+  `id` int(11) NOT NULL,
+  `auditor_firstname` varchar(100) NOT NULL,
+  `auditor_lastname` varchar(100) NOT NULL,
+  `birthday` date NOT NULL,
+  `email` varchar(150) NOT NULL,
+  `department` varchar(100) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+--
+-- Dumping data for table `auditors`
+--
+
+INSERT INTO `auditors` (`id`, `auditor_firstname`, `auditor_lastname`, `birthday`, `email`, `department`) VALUES
+(1, 'Sarah', 'Discaya', '2025-10-18', 'sarahdisakaya@gmail.com', 'IT Support'),
+(2, 'Matt', 'De Luna', '2025-10-20', 'mattdelona@gmail.com', 'QA Department');
 
 -- --------------------------------------------------------
 
@@ -71,24 +80,20 @@ INSERT INTO `agents` (`id`, `agent_lastname`, `agent_firsttname`, `birthday`, `e
 CREATE TABLE `auditors2` (
   `id` int(11) NOT NULL,
   `auditor_firstname` varchar(100) NOT NULL,
-  `auditor_lasttname` varchar(100) NOT NULL,
+  `auditor_lastname` varchar(100) NOT NULL,
   `birthday` date DEFAULT NULL,
   `email` varchar(150) DEFAULT NULL,
-  `department` varchar(100) NOT NULL
+  `department` varchar(100) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `auditors2`
 --
 
-INSERT INTO `auditors2` (`id`, `auditor_firstname`, `auditor_lasttname`, `birthday`, `email`, `department`) VALUES
+INSERT INTO `auditors2` (`id`, `auditor_firstname`, `auditor_lastname`, `birthday`, `email`, `department`) VALUES
+(0, 'Sarah', 'Duterte', '2025-10-04', 'sarahdutirti@gmail.com', 'Operations'),
 (1, 'Alyssa Marie', 'Maranan', '1985-06-15', 'john.smith@gmail.com', 'Quality Assurance'),
-(2, 'Sitti Aisha', 'Alpad', '1985-06-15', 'sitti.alpad@gmail.com', 'Quality Assurance'),
-(3, 'Nel Andrew', 'Brozo', '1221-12-12', 'brozoandrew@collectivesolutions.com', 'QA Department'),
-(5, 'Sheldon Lee', 'Cooper', '1984-09-05', 'coopal@collectivesolutions.com', 'IT Support'),
-(11, 'Daril', 'Cooper', '2005-05-05', 'coopal@collectivesolutions.com', 'IT Support'),
-(12, 'Rejena', 'Lagarder', '2211-12-12', 'asdasdasdasd@gmail.com', 'IT Support'),
-(13, 'Daril', 'Brozo', '1222-12-12', 'brozoandrew@collectivesolutions.com', 'Operations');
+(2, 'Sitti Aisha', 'Alpad', '1985-06-15', 'sitti.alpad@gmail.com', 'Quality Assurance');
 
 -- --------------------------------------------------------
 
@@ -112,11 +117,9 @@ CREATE TABLE `coaching_sessions` (
 --
 
 INSERT INTO `coaching_sessions` (`id`, `coach`, `agent`, `date`, `time`, `type`, `notes`, `created_at`) VALUES
-(1, 'Sitti', 'Nel Andrew Brozo', '2025-10-02', '19:24:00', 'Performance', 'Omsim', '2025-10-12 11:21:20'),
-(4, 'Sitti', 'Alex Gonzaga', '2025-10-01', '05:00:00', 'Attendance', 'tanga tanga', '2025-10-12 11:26:42'),
-(5, 'Darel', 'Nel Andrew Brozo', '2025-10-23', '20:00:00', 'Behavioral', 'I love you', '2025-10-12 11:41:12'),
-(6, 'Darel', 'Alex Gonzaga', '2025-10-03', '19:45:00', 'Performance', 'asda', '2025-10-12 11:43:34'),
-(7, 'Darel', 'Alex Gonzaga', '2025-10-03', '19:45:00', 'Performance', 'asda', '2025-10-12 11:44:24');
+(0, 'BBM', 'Alex Gonzaga', '2025-10-15', '22:49:00', 'Behavioral', 'Tanga e, turuan mo nga', '2025-10-14 13:50:43'),
+(0, 'Sarah Duterte', 'Alex Gonzaga', '2025-10-14', '09:54:00', 'Attendance', 'Di pumapasok, napaka tamad puta', '2025-10-14 13:51:12'),
+(0, 'BBM', 'Alex Gonzaga', '2025-10-07', '11:52:00', 'Behavioral', 'asdasdasdas', '2025-10-14 15:50:47');
 
 -- --------------------------------------------------------
 
@@ -139,7 +142,8 @@ CREATE TABLE `data_analysts` (
 --
 
 INSERT INTO `data_analysts` (`id`, `data_analyst_lastname`, `data_analyst_firstname`, `birthday`, `email`, `department`, `created_at`) VALUES
-(1, 'Brozo', 'Nel Andrew', '2004-12-11', 'brozoandro@collectivesolutions.com', 'Operations', '2025-08-31 15:00:25');
+(0, 'Duterte', 'Sarah', '2025-10-08', 'sarahduterte@gmail.com', 'QA Department', '2025-10-14 12:34:59'),
+(0, 'Condeno', 'James Rhyan', '2025-10-11', 'jamecondeno@gmail.com', 'IT Support', '2025-10-15 04:30:56');
 
 -- --------------------------------------------------------
 
@@ -179,12 +183,14 @@ CREATE TABLE `data_reports` (
 --
 
 INSERT INTO `data_reports` (`id`, `reviewer_name`, `agent_name`, `status`, `date`, `week`, `time`, `caller_name`, `duration`, `queue`, `mdn`, `account_number`, `q1`, `q2`, `q3`, `q4`, `q5`, `q6`, `q7`, `q8`, `q9`, `q10`, `comment`, `created_at`) VALUES
-(14, 'Sitti Aisha Alpad', 'Nel Andrew Brozo', 'Trainee', '2004-12-11', 'Week 50', '00:52:00', 'Bongbong Marcos', '12:12:12', NULL, '0993834929', '6546154456141', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'Yes', 'Yes', 'Bobo', '2025-08-31 13:48:50'),
-(15, 'Alyssa Marie Maranan', 'Coco Langot', 'Regular', '1999-08-25', 'Week 34', '23:52:00', 'Bogart Dela Cruz', '08:08:08', NULL, '0993834929', '6546154456141', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'sorry', '2025-08-31 13:50:23'),
-(17, 'Daril Brozo', 'Daril Puwitan', 'Trainee', '1211-12-12', 'Week 50', '05:13:00', 'Bongbong Marcos', '11:11:11', NULL, '0993834929', '6546154456141', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'ihh ang bangis', '2025-09-09 18:12:01'),
-(18, 'Sitti Aisha Alpad', 'Coco Langot', 'Regular', '2025-10-09', 'Week 41', '15:37:00', 'Bongbong Marcos', '11:01:01', NULL, '0993834929', '6546154456141', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', '', '2025-10-12 07:35:12'),
-(19, 'Daril Brozo', 'Matt De luna', 'Probationary', '2025-10-09', 'Week 41', '07:43:00', 'Bongbong Marcos', '11:11:11', NULL, '0993834929', '6546154456141', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Sorry', '2025-10-12 11:41:53'),
-(20, 'Daril Cooper', 'Daril Puwitan', 'Probationary', '2025-10-16', 'Week 42', '07:59:00', 'Bongbong Marcos', '12:11:12', NULL, '0993834929', '6546154456141', 'N/A', 'No', 'Yes', 'No', 'No', 'Yes', 'Yes', 'No', 'No', 'Yes', 'Sorry po', '2025-10-12 11:58:36');
+(4, 'Sitti Aisha Alpad', 'Coco Langot', 'Others', '2025-10-01', 'Week 40', '20:53:00', 'sadasd', '12:12:12', NULL, '323414143', '43431431431431', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Sorry', '2025-10-14 12:57:45'),
+(5, 'Sitti Aisha Alpad', 'Alex Gonzaga', 'Trainee', '2025-10-02', 'Week 40', '01:45:00', 'Sarah Duterte', '05:05:35', NULL, '09319342379', '12345678900', 'Yes', 'No', 'Yes', 'No', 'Yes', 'No', 'Yes', 'No', 'Yes', 'Yes', 'Sorry', '2025-10-14 14:41:48'),
+(6, 'Alyssa Marie Maranan', 'Alex Gonzaga', 'Probationary', '2025-10-16', 'Week 42', '22:46:00', 'Sarah Duterte', '11:17:07', NULL, '09319342379', '12345678900', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', 'No', '', '2025-10-14 14:44:38'),
+(7, 'Alyssa Marie Maranan', 'Alex Gonzaga', 'Trainee', '2025-11-10', 'Week 46', '12:50:00', 'Leni', '01:30:20', NULL, '09665783451', '1123554885', 'Yes', 'Yes', 'No', 'Yes', 'Yes', 'Yes', 'No', 'No', 'Yes', 'Yes', 'great job!', '2025-10-14 14:50:03'),
+(8, 'Alyssa Marie Maranan', 'Coco Langot', 'Regular', '2025-10-02', 'Week 40', '14:50:00', 'Kiko', '01:10:10', NULL, '09785643211', '2324576', 'Yes', 'Yes', 'Yes', 'No', 'No', 'Yes', 'Yes', 'No', 'Yes', 'Yes', 'well done!', '2025-10-14 14:51:59'),
+(9, 'Alyssa Marie Maranan', 'Alex Gonzaga', 'Probationary', '2025-12-01', 'Week 49', '10:30:00', 'Donny', '01:50:30', NULL, '09123567841', '1232445545', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'No', 'Yes', 'Yes', 'Yes', 'Great, you\'ve passed!', '2025-10-14 14:53:41'),
+(10, 'Sitti Aisha Alpad', 'Coco Langot', 'Regular', '2025-10-30', 'Week 44', '08:40:00', 'Melani', '02:10:10', NULL, '09678543211', '1243154315', 'Yes', 'Yes', 'No', 'No', 'No', 'Yes', 'Yes', 'No', 'Yes', 'Yes', 'Good job!', '2025-10-14 14:55:13'),
+(11, 'Sarah Duterte', 'Joy Bilmunte', 'Probationary', '2025-10-16', 'Week 42', '06:27:00', 'Sarah Duterte', '11:34:34', NULL, '54654755454', '43431431431431', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Yes', 'Sorry', '2025-10-15 08:25:51');
 
 -- --------------------------------------------------------
 
@@ -207,8 +213,12 @@ CREATE TABLE `supervisors` (
 --
 
 INSERT INTO `supervisors` (`id`, `supervisor_lastname`, `supervisor_firstname`, `birthday`, `email`, `team`, `created_at`) VALUES
-(1, 'Adrid', 'Jayvee', '1954-08-31', 'coupalbossing@collectivesolutions.com', 'Team Bravo', '2025-08-31 15:01:01'),
-(3, 'Brozo', 'Andrew', '2025-10-24', 'coupalbossing1@collectivesolutions.com', 'Team Alpha', '2025-10-12 07:32:30');
+(1, 'Adrid', 'Jayvee', '1954-08-31', 'coupalbossing@collectivesolutions.com', 'Team Bravo', '2025-08-31 07:01:01'),
+(0, 'Marcos', 'BongBong', '2025-10-07', 'bongbongmarcos@gmail.com', 'Team Charlie', '2025-10-14 11:53:59'),
+(0, 'Marcos', 'BongBong', '2025-10-16', 'bongbongmarcos@gmail.com', 'Team Charlie', '2025-10-14 12:33:42'),
+(0, 'Marcos', 'BongBong', '2025-10-03', 'bongbongmarcos@gmail.com', 'Team Charlie', '2025-10-15 04:29:44'),
+(0, 'Duterte', 'Sarah', '2025-10-04', 'sarahduterte@gmail.com', 'Team Bravo', '2025-10-15 04:30:05'),
+(0, 'Morenencia', 'Kian', '2025-10-27', 'kiankopalogs@gmail.com', 'Team Bravo', '2025-10-15 04:30:29');
 
 -- --------------------------------------------------------
 
@@ -220,7 +230,7 @@ CREATE TABLE `users` (
   `id` int(11) NOT NULL,
   `username` varchar(50) NOT NULL,
   `password` varchar(255) NOT NULL,
-  `role` enum('admin','user','auditor','supervisor','data_analyst') DEFAULT 'user',
+  `role` enum('admin','auditor','supervisor','data_analyst') DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -229,27 +239,28 @@ CREATE TABLE `users` (
 --
 
 INSERT INTO `users` (`id`, `username`, `password`, `role`, `created_at`) VALUES
-(1, 'admin', 'admin123', 'admin', '2025-07-21 16:15:59'),
-(2, 'Jhay', '123456', 'supervisor', '2025-07-21 16:15:59'),
-(17, 'Hana', '123456', 'admin', '2025-08-31 11:31:17'),
-(18, 'Sitti', '123456', 'supervisor', '2025-08-31 11:50:18'),
-(23, 'audit', 'audit123', 'auditor', '2025-09-09 11:10:16'),
-(26, 'anna', '123', 'data_analyst', '2025-09-09 11:22:18');
+(1, 'admin', 'admin123', 'admin', '2025-07-31 17:15:31'),
+(2, 'jhay', 'password', 'auditor', '2025-07-31 17:15:31'),
+(3, 'alyssa', '12345', 'admin', '2025-08-20 05:43:34'),
+(5, 'anna', '123', 'data_analyst', '2025-09-09 23:32:49'),
+(6, '123', '123', 'data_analyst', '2025-10-14 06:30:46'),
+(7, 'Andrew Brozo', '123', 'admin', '2025-10-14 07:51:35'),
+(9, 'andro', '123', 'auditor', '2025-10-15 02:13:10');
 
 --
 -- Indexes for dumped tables
 --
 
 --
--- Indexes for table `admin_logs`
+-- Indexes for table `agents2`
 --
-ALTER TABLE `admin_logs`
+ALTER TABLE `agents2`
   ADD PRIMARY KEY (`id`);
 
 --
--- Indexes for table `agents`
+-- Indexes for table `auditors`
 --
-ALTER TABLE `agents`
+ALTER TABLE `auditors`
   ADD PRIMARY KEY (`id`);
 
 --
@@ -259,30 +270,10 @@ ALTER TABLE `auditors2`
   ADD PRIMARY KEY (`id`);
 
 --
--- Indexes for table `coaching_sessions`
---
-ALTER TABLE `coaching_sessions`
-  ADD PRIMARY KEY (`id`);
-
---
--- Indexes for table `data_analysts`
---
-ALTER TABLE `data_analysts`
-  ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `email` (`email`);
-
---
 -- Indexes for table `data_reports`
 --
 ALTER TABLE `data_reports`
   ADD PRIMARY KEY (`id`);
-
---
--- Indexes for table `supervisors`
---
-ALTER TABLE `supervisors`
-  ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `email` (`email`);
 
 --
 -- Indexes for table `users`
@@ -296,52 +287,28 @@ ALTER TABLE `users`
 --
 
 --
--- AUTO_INCREMENT for table `admin_logs`
+-- AUTO_INCREMENT for table `agents2`
 --
-ALTER TABLE `admin_logs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+ALTER TABLE `agents2`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
--- AUTO_INCREMENT for table `agents`
+-- AUTO_INCREMENT for table `auditors`
 --
-ALTER TABLE `agents`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
-
---
--- AUTO_INCREMENT for table `auditors2`
---
-ALTER TABLE `auditors2`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
-
---
--- AUTO_INCREMENT for table `coaching_sessions`
---
-ALTER TABLE `coaching_sessions`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
-
---
--- AUTO_INCREMENT for table `data_analysts`
---
-ALTER TABLE `data_analysts`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+ALTER TABLE `auditors`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=3;
 
 --
 -- AUTO_INCREMENT for table `data_reports`
 --
 ALTER TABLE `data_reports`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
-
---
--- AUTO_INCREMENT for table `supervisors`
---
-ALTER TABLE `supervisors`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `users`
 --
 ALTER TABLE `users`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=27;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

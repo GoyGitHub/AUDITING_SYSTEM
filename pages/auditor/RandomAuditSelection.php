@@ -39,6 +39,35 @@ if (isset($_GET['random_audit'])) {
         exit();
     } 
 }
+
+// --- Generate Random Audit Ticket ---
+if (isset($_GET['generate_ticket'])) {
+    // Pick a random agent from agents2
+    $result = $conn->query("SELECT id FROM agents2 ORDER BY RAND() LIMIT 1");
+    if ($result && $row = $result->fetch_assoc()) {
+        $agentId = $row['id'];
+        // Insert ticket into audit_tickets
+        $stmt = $conn->prepare("INSERT INTO audit_tickets (auditor, agent_id) VALUES (?, ?)");
+        $stmt->bind_param("si", $username, $agentId);
+        $stmt->execute();
+        $stmt->close();
+        // Redirect to dashboard to avoid resubmission
+        header("Location: AuditorDashboard.php");
+        exit();
+    }
+}
+
+// --- Fetch auditor's tickets (pending only) ---
+$tickets = [];
+$ticketSql = "SELECT id, created_at, status FROM audit_tickets WHERE auditor = ? AND status = 'pending' ORDER BY created_at DESC";
+$stmt = $conn->prepare($ticketSql);
+$stmt->bind_param("s", $username);
+$stmt->execute();
+$ticketResult = $stmt->get_result();
+while ($row = $ticketResult->fetch_assoc()) {
+    $tickets[] = $row;
+}
+$stmt->close();
 ?>
 
 
@@ -256,8 +285,39 @@ if (isset($_GET['random_audit'])) {
          <!-- Quick Actions -->
          <div class="dashboard-buttons">
             <a href="AuditorAuditForm.php"><i class="ri-survey-fill"></i> Start New Audit</a>
-            <a href="RandomAuditSelection.php"><i class="ri-shuffle-fill"></i> Audit a Random Agent</a>
+            <a href="?generate_ticket=1"><i class="ri-shuffle-fill"></i> Generate Random Audit Ticket</a>
          </div>
+
+         <!-- My Audit Tickets Section -->
+         <h2 style="margin-top:2.5rem;">My Audit Tickets</h2>
+         <table class="recent-audits-table">
+            <thead>
+                <tr>
+                    <th>Ticket #</th>
+                    <th>Created At</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php if (count($tickets)): ?>
+                    <?php foreach ($tickets as $ticket): ?>
+                        <tr>
+                            <td><?php echo htmlspecialchars($ticket['id']); ?></td>
+                            <td><?php echo htmlspecialchars($ticket['created_at']); ?></td>
+                            <td><?php echo htmlspecialchars(ucfirst($ticket['status'])); ?></td>
+                            <td>
+                                <a href="EditAuditTicket.php?id=<?php echo $ticket['id']; ?>" style="color:#0055aa;font-weight:600;">Edit Ticket</a>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <tr>
+                        <td colspan="4" style="text-align:center;">No pending audit tickets.</td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+         </table>
 
          <!-- Recent Audits Table (global, completed only) -->
          <h2 style="margin-top:2.5rem;">Recent Audits</h2>

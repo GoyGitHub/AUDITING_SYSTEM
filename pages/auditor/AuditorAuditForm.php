@@ -1,16 +1,14 @@
 <?php 
-include('../../database/dbconnection.php'); 
+include('../../database/dbconnection.php');
 
-session_start();
-if (!isset($_SESSION['user_id'])) {
-    header("Location: ../../LoginFunction.php"); // redirect if not logged in
-    exit();
+// ✅ Load session user details safely
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
 }
 
+// Pull data from session
 $username = $_SESSION['username'] ?? 'User';
 $role = ucfirst($_SESSION['user_role'] ?? 'User');
-
-// Format display name as “Username.”
 $displayName = ucfirst($username) . '.';
 
 
@@ -23,8 +21,48 @@ $auditors_result = mysqli_query($conn, $auditors_query);
 // Agents list
 $agents_query = "SELECT id, agent_firstname, agent_lastname FROM agents2";
 $agents_result = mysqli_query($conn, $agents_query);
-?>
 
+// --- Show audit ticket if present ---
+$ticketAgentName = '';
+if (isset($_GET['ticket_id'])) {
+    // Fetch ticket info
+    $ticketId = intval($_GET['ticket_id']);
+    $ticketSql = "SELECT agent_id FROM audit_tickets WHERE id = $ticketId LIMIT 1";
+    $ticketRes = $conn->query($ticketSql);
+    if ($ticketRes && $ticketRow = $ticketRes->fetch_assoc()) {
+        $agentId = $ticketRow['agent_id'];
+        // Get agent name from agents2
+        $agentRes = $conn->query("SELECT agent_firstname, agent_lastname FROM agents2 WHERE id = $agentId LIMIT 1");
+        if ($agentRes && $agentRow = $agentRes->fetch_assoc()) {
+            $ticketAgentName = $agentRow['agent_firstname'] . ' ' . $agentRow['agent_lastname'];
+        }
+    }
+}
+
+// --- Automatically pick a random agent when opening the form ---
+$autoAgentName = '';
+if (!isset($_GET['ticket_id'])) {
+    $autoAgentRes = $conn->query("SELECT agent_firstname, agent_lastname FROM agents2 ORDER BY RAND() LIMIT 1");
+    if ($autoAgentRes && $autoAgentRow = $autoAgentRes->fetch_assoc()) {
+        $autoAgentName = $autoAgentRow['agent_firstname'] . ' ' . $autoAgentRow['agent_lastname'];
+    }
+}
+
+// --- Slideshow for random agents (show as Agent 1, Agent 2, ...) ---
+$randomAgents = [];
+$realAgentNames = [];
+$agents_query_slide = "SELECT agent_firstname, agent_lastname FROM agents2 ORDER BY RAND() LIMIT 5";
+$agents_result_slide = $conn->query($agents_query_slide);
+if ($agents_result_slide && $agents_result_slide->num_rows > 0) {
+    $idx = 1;
+    while ($row = $agents_result_slide->fetch_assoc()) {
+        $realName = $row['agent_firstname'] . ' ' . $row['agent_lastname'];
+        $randomAgents[] = "Agent " . $idx;
+        $realAgentNames[] = $realName;
+        $idx++;
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -62,7 +100,7 @@ $agents_result = mysqli_query($conn, $agents_query);
         /* --- Main Redesign --- */
         body {
             font-family: 'Nunito Sans', sans-serif;
-            background: linear-gradient(120deg, #e0e7ff 0%, #f8fafc 100%);
+            background: #fff;
             margin: 0;
             padding: 0;
         }
@@ -265,6 +303,72 @@ $agents_result = mysqli_query($conn, $agents_query);
             background: linear-gradient(90deg, #1a237e 60%, #3949ab 100%);
         }
 
+        /* --- Slideshow for random agents --- */
+        .agent-slideshow-container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto 2rem auto;
+            position: relative;
+            background: #fff;
+            border-radius: 1rem;
+            box-shadow: 0 2px 8px rgba(33,150,243,0.08);
+            padding: 1.2rem 2rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .agent-slide {
+            display: none;
+            font-size: 1.25rem;
+            color: #003366;
+            font-weight: 700;
+            margin-bottom: 0.7rem;
+        }
+        .agent-slide.active {
+            display: block;
+        }
+        .agent-slideshow-controls {
+            display: flex;
+            gap: 1.2rem;
+            margin-bottom: 0.7rem;
+        }
+        .agent-slideshow-btn {
+            background: #fff;
+            color: #3a8de0;
+            border: 2px solid #3a8de0;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, color 0.2s;
+        }
+        .agent-slideshow-btn:hover {
+            background: #3a8de0;
+            color: #fff;
+        }
+        .agent-slideshow-btn i {
+            font-size: 1.5rem;
+        }
+        .agent-pick-btn {
+            background: #0055aa;
+            color: #fff;
+            border: none;
+            border-radius: 0.7rem;
+            padding: 0.7rem 2.2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            transition: background 0.2s;
+        }
+        .agent-pick-btn:hover {
+            background: #003366;
+        }
+
         /* --- Responsive --- */
         @media (max-width: 900px) {
             .main.container { padding: 1rem; }
@@ -359,6 +463,89 @@ $agents_result = mysqli_query($conn, $agents_query);
     <!-- MAIN -->
     <main class="main container" id="main">
         <h1>Agent Audit Sheet</h1>
+        <!-- Slideshow for random agents -->
+        <div class="agent-slideshow-container">
+            <div id="agentSlides">
+                <?php foreach ($randomAgents as $i => $agentLabel): ?>
+                    <div class="agent-slide<?php echo $i === 0 ? ' active' : ''; ?>" 
+                         data-agent-label="<?php echo htmlspecialchars($agentLabel); ?>"
+                         data-agent-real="<?php echo htmlspecialchars($realAgentNames[$i]); ?>">
+                        <?php echo htmlspecialchars($agentLabel); ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+            <div class="agent-slideshow-controls">
+                <button class="agent-slideshow-btn" onclick="prevAgentSlide()">
+                    <i class="ri-arrow-left-s-line"></i>
+                </button>
+                <button class="agent-slideshow-btn" onclick="nextAgentSlide()">
+                    <i class="ri-arrow-right-s-line"></i>
+                </button>
+            </div>
+            <button class="agent-pick-btn" onclick="pickAgentSlide()">Pick This Agent</button>
+            <div id="agentReveal" style="margin-top:1rem; font-size:1.1rem; color:#0055aa; font-weight:600; display:none;">
+                <!-- Revealed agent name will appear here -->
+            </div>
+        </div>
+        <script>
+            let agentSlideIndex = 0;
+            const agentSlides = document.querySelectorAll('.agent-slide');
+            function showAgentSlide(idx) {
+                agentSlides.forEach((slide, i) => {
+                    slide.classList.toggle('active', i === idx);
+                });
+                agentSlideIndex = idx;
+                document.getElementById('agentReveal').style.display = 'none';
+            }
+            function prevAgentSlide() {
+                let idx = agentSlideIndex - 1;
+                if (idx < 0) idx = agentSlides.length - 1;
+                showAgentSlide(idx);
+            }
+            function nextAgentSlide() {
+                let idx = agentSlideIndex + 1;
+                if (idx >= agentSlides.length) idx = 0;
+                showAgentSlide(idx);
+            }
+            function pickAgentSlide() {
+                const slide = agentSlides[agentSlideIndex];
+                const agentLabel = slide.getAttribute('data-agent-label');
+                const agentReal = slide.getAttribute('data-agent-real');
+                // Reveal real agent name
+                const revealDiv = document.getElementById('agentReveal');
+                revealDiv.textContent = "Selected: " + agentReal;
+                revealDiv.style.display = 'block';
+                // Set agent dropdown to picked agent
+                const agentSelect = document.querySelector('select[name="agent_name"]');
+                if (agentSelect) {
+                    for (let i = 0; i < agentSelect.options.length; i++) {
+                        if (agentSelect.options[i].value === agentReal) {
+                            agentSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
+            // Automatically pick a random agent on page load
+            document.addEventListener('DOMContentLoaded', function() {
+                <?php if ($autoAgentName): ?>
+                const agentSelect = document.querySelector('select[name="agent_name"]');
+                if (agentSelect) {
+                    for (let i = 0; i < agentSelect.options.length; i++) {
+                        if (agentSelect.options[i].value === "<?php echo addslashes($autoAgentName); ?>") {
+                            agentSelect.selectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+                <?php endif; ?>
+            });
+        </script>
+        <?php if ($ticketAgentName): ?>
+            <div style="background:#eaf1fb; border-radius:1rem; padding:1.2rem 2rem; margin-bottom:2rem; box-shadow:0 2px 8px rgba(33,150,243,0.08); font-size:1.15rem; color:#003366;">
+                <strong>Audit Ticket:</strong> <span style="font-weight:700;"><?php echo htmlspecialchars($ticketAgentName); ?></span>
+            </div>
+        <?php endif; ?>
         <div class="audit-card">
             <form method="POST">
                 <div class="info-bar">
@@ -378,10 +565,21 @@ $agents_result = mysqli_query($conn, $agents_query);
                         <label>Agent's Name:</label>
                         <select name="agent_name" required>
                             <option value=""> Select Agent</option>
-                            <?php while ($row = mysqli_fetch_assoc($agents_result)) : 
-                                $fullname = $row['agent_firstname'] . " " . $row['agent_lastname']; ?>
-                                <option value="<?php echo htmlspecialchars($fullname); ?>"><?php echo htmlspecialchars($fullname); ?></option>
-                            <?php endwhile; ?>
+                            <?php
+                            // Reset agents_result pointer if ticket is present
+                            if ($ticketAgentName) {
+                                echo '<option value="' . htmlspecialchars($ticketAgentName) . '" selected>' . htmlspecialchars($ticketAgentName) . '</option>';
+                            }
+                            // Only show other agents if not ticket
+                            if ($agents_result) {
+                                while ($row = mysqli_fetch_assoc($agents_result)) :
+                                    $fullname = $row['agent_firstname'] . " " . $row['agent_lastname'];
+                                    if ($ticketAgentName && $fullname == $ticketAgentName) continue;
+                            ?>
+                                    <option value="<?php echo htmlspecialchars($fullname); ?>"><?php echo htmlspecialchars($fullname); ?></option>
+                            <?php endwhile;
+                            }
+                            ?>
                         </select>
                     </div>
                     <div class="info-field">
@@ -475,6 +673,14 @@ $agents_result = mysqli_query($conn, $agents_query);
                     </div>
                 </div>
 
+                <!-- New Supervisor Comment Section -->
+                <div class="info-bar" style="margin-top: 1rem;">
+                    <div class="info-field" style="flex: 1 1 100%;">
+                        <label>Supervisor Comment (for approval):</label>
+                        <textarea name="supervisor_comment" rows="3"></textarea>
+                    </div>
+                </div>
+
                 <button type="submit" name="submit" class="submit-btn">Submit Audit</button>
             </form>
         </div>
@@ -516,6 +722,17 @@ $agents_result = mysqli_query($conn, $agents_query);
             );
 
             if ($stmt->execute()) {
+                // After audit submission, handle supervisor comment
+                if (!empty($_POST['supervisor_comment'])) {
+                    // Get last inserted audit id
+                    $audit_id = $conn->insert_id;
+                    $supervisor_comment = $_POST['supervisor_comment'];
+                    $stmt2 = $conn->prepare("INSERT INTO supervisor_comments (audit_id, agent_name, reviewer_name, comment) VALUES (?, ?, ?, ?)");
+                    $stmt2->bind_param("isss", $audit_id, $agent, $reviewer, $supervisor_comment);
+                    $stmt2->execute();
+                    $stmt2->close();
+                }
+
                 echo "<script>
                     document.addEventListener('DOMContentLoaded', function() {
                         const n = document.getElementById('notification');
