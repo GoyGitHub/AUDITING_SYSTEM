@@ -192,6 +192,32 @@ if (isset($_GET['cancel_id'])) {
          from { opacity: 0; transform: translateY(-20px); }
          to { opacity: 1; transform: translateY(0); }
       }
+      .contact-link {
+         display: inline-flex;
+         align-items: center;
+         justify-content: center;
+         width: 36px;
+         height: 36px;
+         border-radius: 8px;
+         text-decoration: none;
+         color: #1976d2;
+         background: transparent;
+         transition: background 0.15s, color 0.15s;
+         cursor: pointer;
+      }
+      .contact-link:hover {
+         background: rgba(25,119,210,0.08);
+         color: #0d47a1;
+      }
+      .contact-disabled {
+         display:inline-flex;
+         align-items:center;
+         justify-content:center;
+         width:36px;
+         height:36px;
+         border-radius:8px;
+         color:#ccc;
+      }
    </style>
    <title>Conduct Coaching - UCX</title>
 </head>
@@ -374,6 +400,7 @@ if (isset($_GET['cancel_id'])) {
                <th>Type</th>
                <th>Notes</th>
                <th>Action</th>
+               <th>Contact</th>
             </tr>
          </thead>
          <tbody>
@@ -381,9 +408,78 @@ if (isset($_GET['cancel_id'])) {
             $sched_result = $conn->query("SELECT id, coach, agent, date, time, type, notes FROM coaching_sessions ORDER BY date DESC, time DESC");
             if ($sched_result && $sched_result->num_rows > 0) {
                while ($sched = $sched_result->fetch_assoc()) {
+                  $agentName = trim($sched['agent']);
+                  $agentEmail = '';
+                  // Fetch agent email from agents2 (match "Firstname Lastname")
+                  $emailStmt = $conn->prepare("SELECT email FROM agents2 WHERE CONCAT(agent_firstname, ' ', agent_lastname) = ? LIMIT 1");
+                  if ($emailStmt) {
+                      $emailStmt->bind_param("s", $agentName);
+                      $emailStmt->execute();
+                      $er = $emailStmt->get_result();
+                      if ($er && $rowe = $er->fetch_assoc()) {
+                          $agentEmail = $rowe['email'];
+                      }
+                      $emailStmt->close();
+                  }
+
+                  // Determine latest audit score for this agent (Yes = 10 points)
+                  $score = null;
+                  $reportStmt = $conn->prepare("SELECT q1,q2,q3,q4,q5,q6,q7,q8,q9,q10 FROM data_reports WHERE agent_name = ? ORDER BY created_at DESC LIMIT 1");
+                  if ($reportStmt) {
+                      $reportStmt->bind_param("s", $agentName);
+                      $reportStmt->execute();
+                      $rr = $reportStmt->get_result();
+                      if ($rr && $rrow = $rr->fetch_assoc()) {
+                          $score = 0;
+                          for ($qi = 1; $qi <= 10; $qi++) {
+                              $ans = strtolower(trim($rrow["q$qi"] ?? ''));
+                              if ($ans === 'yes') $score += 10;
+                          }
+                      }
+                      $reportStmt->close();
+                  }
+
+                  // Flag as 'needs contact' if score is available and below threshold
+                  $needsContact = false;
+                  $threshold = 60; // adjust threshold as desired
+                  if ($score !== null && $score < $threshold) {
+                      $needsContact = true;
+                  }
+
+                  // Prepare contact link to open Gmail compose with prefilled fields and mailto fallback
+                  $contactHtml = '';
+                  if ($needsContact && !empty($agentEmail)) {
+                      $subject = "Coaching follow-up for {$agentName}";
+                      $body = "Hello,\n\nPlease follow up with {$agentName} regarding the recent coaching session scheduled on {$sched['date']} at {$sched['time']}.\n\nNotes: {$sched['notes']}\n\nRegards,\n{$displayName}";
+                      $gmailUrl = "https://mail.google.com/mail/u/3/#inbox?compose=new"
+                                  . "&to=" . urlencode($agentEmail)
+                                  . "&su=" . urlencode($subject)
+                                  . "&body=" . urlencode($body);
+                      $mailtoUrl = "mailto:" . rawurlencode($agentEmail) . "?subject=" . rawurlencode($subject) . "&body=" . rawurlencode($body);
+
+                      // Single primary clickable icon opens Gmail web; include rel and target for safety
+                      $contactHtml = '<a href="' . htmlspecialchars($gmailUrl) . '" target="_blank" rel="noopener noreferrer" class="contact-link" title="Contact via Gmail (web)">';
+                      $contactHtml .= '<i class="ri-mail-line" aria-hidden="true" style="font-size:1.15rem;"></i>';
+                      $contactHtml .= '</a>';
+
+                      // Provide a small mailto fallback (visible on hover/secondary) — clickable too
+                      $contactHtml .= ' <a href="' . htmlspecialchars($mailtoUrl) . '" class="contact-link" title="Open mail client">';
+                      $contactHtml .= '<i class="ri-mail-open-line" aria-hidden="true" style="font-size:1.05rem;"></i>';
+                      $contactHtml .= '</a>';
+                  } elseif (!empty($agentEmail)) {
+                      // show available-but-not-flagged icon (clickable mailto)
+                      $mailtoUrl = "mailto:" . rawurlencode($agentEmail);
+                      $contactHtml = '<a href="' . htmlspecialchars($mailtoUrl) . '" class="contact-link" title="Email agent">';
+                      $contactHtml .= '<i class="ri-mail-line" aria-hidden="true" style="font-size:1.05rem;"></i>';
+                      $contactHtml .= '</a>';
+                  } else {
+                      // no email found
+                      $contactHtml = '<span class="contact-disabled" title="No email on file"><i class="ri-mail-line" aria-hidden="true" style="font-size:1.05rem;"></i></span>';
+                  }
+
                   echo "<tr>
                      <td>" . htmlspecialchars($sched['coach']) . "</td>
-                     <td>" . htmlspecialchars($sched['agent']) . "</td>
+                     <td>" . htmlspecialchars($agentName) . "</td>
                      <td>" . htmlspecialchars($sched['date']) . "</td>
                      <td>" . htmlspecialchars($sched['time']) . "</td>
                      <td>" . htmlspecialchars($sched['type']) . "</td>
@@ -391,10 +487,11 @@ if (isset($_GET['cancel_id'])) {
                      <td>
                         <a href='?cancel_id=" . $sched['id'] . "' style='color:#d32f2f;font-weight:600;text-decoration:none;' onclick=\"return confirm('Cancel this coaching session?');\">Cancel</a>
                      </td>
+                     <td style='text-align:center;'>" . $contactHtml . "</td>
                   </tr>";
                }
             } else {
-               echo "<tr><td colspan='7' style='color:#888;'>No scheduled coaching sessions.</td></tr>";
+               echo "<tr><td colspan='8' style='color:#888;'>No scheduled coaching sessions.</td></tr>";
             }
             ?>
          </tbody>

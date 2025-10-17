@@ -494,6 +494,9 @@ $accountCount = getCount($conn, 'users');
             <a href="#" onclick="openPersonnelModal()">
                 <i class="ri-user-add-fill"></i> Add Personnel/s
             </a>
+            <a href="AdminCorrectiveActions.php">
+                <i class="ri-team-fill"></i> Corrective Actions
+            </a>
          </div>
 
       </section>
