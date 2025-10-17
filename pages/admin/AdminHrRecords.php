@@ -177,14 +177,6 @@ $displayName = ucfirst($username) . '.';
                   <i class="ri-settings-3-fill"></i>
                   <span>Admin Tools</span>
                </a>
-               <a href="#" class="sidebar__link">
-                  <i class="ri-mail-unread-fill"></i>
-                  <span>My Messages</span>
-               </a>
-               <a href="#" class="sidebar__link">
-                  <i class="ri-notification-2-fill"></i>
-                  <span>Notifications</span>
-               </a>
             </div>
          </div>
       </div>

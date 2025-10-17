@@ -184,19 +184,23 @@ $avgAuditsPerAgent = $agentCount ? round($totalAudits / $agentCount, 2) : 0;
                </a>
                 </div>
             </div>
-            <div>
-                <h3 class="sidebar__title">TOOLS</h3>
-                <div class="sidebar__list">
-                    <a href="#" class="sidebar__link">
-                        <i class="ri-mail-unread-fill"></i>
-                        <span>My Messages</span>
-                    </a>
-                    <a href="#" class="sidebar__link">
-                        <i class="ri-notification-2-fill"></i>
-                        <span>Notifications</span>
-                    </a>
-                </div>
+         <div>
+            <h3 class="sidebar__title"></h3>
+            <div class="sidebar__list">
+               <a href="AdminTools.php" class="sidebar__link">
+                  <i class=""></i>
+                  <span></span>
+               </a>
+               <a href="#" class="sidebar__link">
+                  <i class=""></i>
+                  <span></span>
+               </a>
+               <a href="#" class="sidebar__link">
+                  <i class=""></i>
+                  <span></span>
+               </a>
             </div>
+         </div>
         </div>
         <div class="sidebar__actions">
             <button>

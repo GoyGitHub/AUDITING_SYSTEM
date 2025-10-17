@@ -16,8 +16,14 @@ if (isset($_POST['file_report'])) {
     $reviewer_name = trim($_POST['reviewer_name'] ?? '');
     $comment = trim($_POST['comment'] ?? '');
     if ($audit_id && $agent_name && $reviewer_name && $comment) {
+        // Prefer the audit's reviewer as the "filed by" name if available, 
+        // but the actual filer is the Data Analyst (session username)
+        $filedByRole = "Data Analyst";
+        $filedByName = $username; // session username
+        $comment_with_filer = $comment . " (Filed by: {$filedByRole} - {$filedByName})";
+
         $stmt = $conn->prepare("INSERT INTO supervisor_comments (audit_id, agent_name, reviewer_name, comment) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param("isss", $audit_id, $agent_name, $reviewer_name, $comment);
+        $stmt->bind_param("isss", $audit_id, $agent_name, $reviewer_name, $comment_with_filer);
         if ($stmt->execute()) {
             $successMsg = "Report filed successfully!";
         } else {
@@ -55,9 +61,28 @@ if ($auditRes && $auditRes->num_rows > 0) {
         .report-form button { background:#1976d2; color:#fff; border:none; border-radius:0.5rem; padding:0.7rem 2rem; font-weight:600; cursor:pointer; }
         .msg-success { color:#43a047; font-weight:600; margin-bottom:1rem; }
         .msg-error { color:#e53935; font-weight:600; margin-bottom:1rem; }
+        /* lightweight notification style */
+        .top-notification {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            color: #fff;
+            text-align: center;
+            padding: 12px;
+            font-weight: bold;
+            font-size: 16px;
+            z-index: 9999;
+            display: none;
+            animation: slideDown 0.25s ease;
+        }
+        @keyframes slideDown { from {opacity:0; transform:translateY(-12px);} to {opacity:1; transform:translateY(0);} }
     </style>
 </head>
 <body>
+<!-- top notification (used by script above) -->
+<div id="notification" class="top-notification"></div>
+
 <!--=============== HEADER ===============-->
 <header class="header" id="header">
    <div class="header__container">
@@ -85,7 +110,7 @@ if ($auditRes && $auditRes->num_rows > 0) {
          <div>
             <h3 class="sidebar__title">MANAGE</h3>
             <div class="sidebar__list">
-               <a href="DataAnalystDashboard.php" class="sidebar__link">
+               <a href="DataAnalystDashboard.php" class="sidebar__link active-link">
                   <i class="ri-dashboard-horizontal-fill"></i>
                   <span>Dashboard</span>
                </a>
@@ -145,5 +170,21 @@ if ($auditRes && $auditRes->num_rows > 0) {
     </section>
 </main>
 <script src="../../assets/js/main.js"></script>
+<!-- JS to auto-fill agent/reviewer based on audit select -->
+<script>
+document.getElementById('audit_id').addEventListener('change', function() {
+    const val = this.value;
+    if (!val) return;
+    // Option text format: "AgentName | ReviewerName | date | week"
+    const opt = this.options[this.selectedIndex].text;
+    const parts = opt.split(' | ').map(s => s.trim());
+    const agent = parts[0] || '';
+    const reviewer = parts[1] || '';
+    const agentInput = document.getElementById('agent_name');
+    const reviewerInput = document.getElementById('reviewer_name');
+    if (agentInput) agentInput.value = agent;
+    if (reviewerInput) reviewerInput.value = reviewer;
+});
+</script>
 </body>
 </html>

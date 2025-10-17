@@ -1,25 +1,42 @@
-<?php 
-include('../../database/dbconnection.php'); 
+<?php
+include('../../database/dbconnection.php');
 
-// ✅ Load session user details safely
+// ✅ Start session safely
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Pull data from session
+// ✅ Pull data from session
 $username = $_SESSION['username'] ?? 'User';
-$role = ucfirst($_SESSION['user_role'] ?? 'User');
+$rawRole = $_SESSION['user_role'] ?? 'User';
+
+// ✅ Map and format roles
+$roleMap = [
+    'data_analyst' => 'Data Analyst',
+    // add more roles here if needed
+];
+$role = $roleMap[$rawRole] ?? ucfirst($rawRole);
 $displayName = ucfirst($username) . '.';
 
-// Fetch agents for dropdown
-$agents_result = $conn->query("SELECT id, agent_firstname, agent_lastname FROM agents");
+// ✅ Fetch agents for dropdown (load into array for easy checks)
+$agents_result = $conn->query("SELECT id, agent_firstname, agent_lastname FROM agents2");
+$agents_list = [];
+if ($agents_result && $agents_result->num_rows > 0) {
+    while ($a = $agents_result->fetch_assoc()) {
+        $agents_list[] = $a;
+    }
+}
 
-// Handle cancel action
+// Prefill agent from query param (when redirected after approve/disapprove)
+$prefillAgent = trim($_GET['agent'] ?? '');
+
+// ✅ Handle cancel action
 if (isset($_GET['cancel_id'])) {
-   $cancel_id = intval($_GET['cancel_id']);
-   $conn->query("DELETE FROM coaching_sessions WHERE id = $cancel_id");
+    $cancel_id = intval($_GET['cancel_id']);
+    $conn->query("DELETE FROM coaching_sessions WHERE id = $cancel_id");
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -194,66 +211,64 @@ if (isset($_GET['cancel_id'])) {
 
 <!--=============== SIDEBAR ===============-->
 <nav class="sidebar" id="sidebar">
-   <div class="sidebar__container">
-      <div class="sidebar__user">
-         <div class="sidebar__img">
-            <img src="../../assets/img/perfil.png" alt="image">
-         </div>
+    <div class="sidebar__container">
+        <div class="sidebar__user">
+            <div class="sidebar__img">
+                <img src="../../assets/img/perfil.png" alt="image">
+            </div>
                   <div class="sidebar__info">
                         <h3><?php echo htmlspecialchars($displayName); ?></h3>
                         <span><?php echo htmlspecialchars($role); ?></span>
                 </div>
-      </div>
-      <div class="sidebar__content">
-         <div>
-            <h3 class="sidebar__title">MANAGE</h3>
-            <div class="sidebar__list">
-               <a href="AdminDashboard.php" class="sidebar__link">
-                  <i class="ri-dashboard-horizontal-fill"></i>
-                  <span>Dashboard</span>
-               </a>
-               <a href="AdminAuditDatabank.php" class="sidebar__link">
-                  <i class="ri-database-fill"></i>
-                  <span>UCX Data Bank</span>
-               </a>
-               <a href="AdminConductCoach.php" class="sidebar__link active-link">
+        </div>
+        <div class="sidebar__content">
+            <div>
+                <h3 class="sidebar__title">MANAGE</h3>
+                <div class="sidebar__list">
+                    <a href="SupervisorDashboard.php" class="sidebar__link">
+                        <i class="ri-dashboard-horizontal-fill"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    <a href="SupervisorDatabank.php" class="sidebar__link">
+                        <i class="ri-database-fill"></i>
+                        <span>UCX Data Bank</span>
+                    </a>
+                    <a href="SupervisorConductCoach.php" class="sidebar__link active-link">
                   <i class="ri-ubuntu-fill"></i>
                   <span>UCX Connect</span>
                </a>
-               <a href="AdminAuditForm.php" class="sidebar__link">
-                  <i class="ri-survey-fill"></i>
-                  <span>Unify Audit System (UAS)</span>
-               </a>
-               <a href="AdminHrRecords.php" class="sidebar__link">
-                  <i class="ri-folder-history-fill"></i>
-                  <span>HR Records</span>
-               </a>
+                </div>
             </div>
-         </div>
-
          <div>
-            <h3 class="sidebar__title">TOOLS</h3>
+            <h3 class="sidebar__title"></h3>
             <div class="sidebar__list">
                <a href="AdminTools.php" class="sidebar__link">
-                  <i class="ri-settings-3-fill"></i>
-                  <span>Admin Tools</span>
+                  <i class=""></i>
+                  <span></span>
+               </a>
+               <a href="#" class="sidebar__link">
+                  <i class=""></i>
+                  <span></span>
+               </a>
+               <a href="#" class="sidebar__link">
+                  <i class=""></i>
+                  <span></span>
                </a>
             </div>
          </div>
-      </div>
-
-      <div class="sidebar__actions">
-         <button>
-            <i class="ri-moon-clear-fill sidebar__link sidebar__theme" id="theme-button">
-               <span>Theme</span>
-            </i>
-         </button>
-         <a href="../../LoginFunction.php" class="sidebar__link">
-            <i class="ri-logout-box-r-fill"></i>
-            <span>Log Out</span>
-         </a>
-      </div>
-   </div>
+        </div>
+        <div class="sidebar__actions">
+            <button>
+                <i class="ri-moon-clear-fill sidebar__link sidebar__theme" id="theme-button">
+                    <span>Theme</span>
+                </i>
+            </button>
+            <a href="../../LoginFunction.php" class="sidebar__link">
+                <i class="ri-logout-box-r-fill"></i>
+                <span>Log Out</span>
+            </a>
+        </div>
+    </div>
 </nav>
 
 <main class="main container" id="main" style="max-width: 100vw; width: 100vw;">
@@ -267,14 +282,19 @@ if (isset($_GET['cancel_id'])) {
             </div>
             <div class="conduct-header-info">
                <label>Agent:</label>
-               <select name="agent" required>
+               <select name="agent" required id="agentSelect">
                   <option value="">Select Agent</option>
                   <?php
-                  if ($agents_result && $agents_result->num_rows > 0) {
-                     while ($agent = $agents_result->fetch_assoc()) {
-                        $fullname = $agent['agent_firstname'] . ' ' . $agent['agent_lastname'];
-                        echo '<option value="' . htmlspecialchars($fullname) . '">' . htmlspecialchars($fullname) . '</option>';
-                     }
+                  $foundPrefill = false;
+                  foreach ($agents_list as $agent) {
+                      $fullname = $agent['agent_firstname'] . ' ' . $agent['agent_lastname'];
+                      $selected = ($prefillAgent !== '' && $fullname === $prefillAgent) ? ' selected' : '';
+                      if ($selected) $foundPrefill = true;
+                      echo '<option value="' . htmlspecialchars($fullname) . '"' . $selected . '>' . htmlspecialchars($fullname) . '</option>';
+                  }
+                  // if prefill provided but not in list, add it as selected option
+                  if ($prefillAgent && !$foundPrefill) {
+                      echo '<option value="' . htmlspecialchars($prefillAgent) . '" selected>' . htmlspecialchars($prefillAgent) . '</option>';
                   }
                   ?>
                </select>
@@ -382,5 +402,18 @@ if (isset($_GET['cancel_id'])) {
    </div>
 </main>
 <script src="../../assets/js/main.js"></script>
+<script>
+   // If a prefill agent exists, optionally scroll or focus the agent select
+   (function(){
+       const prefill = <?php echo json_encode($prefillAgent); ?>;
+       if (prefill) {
+           const sel = document.getElementById('agentSelect');
+           if (sel) {
+               // ensure visible
+               sel.scrollIntoView({behavior:'smooth', block:'center'});
+           }
+       }
+   })();
+</script>
 </body>
 </html>

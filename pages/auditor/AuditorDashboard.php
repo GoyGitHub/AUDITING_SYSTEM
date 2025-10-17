@@ -17,7 +17,7 @@ function getCount($conn, $table) {
     return $result ? $result->fetch_assoc()['cnt'] : 0;
 }
 $auditCount = getCount($conn, 'data_reports'); // total audits in databank
-$agentCount = getCount($conn, 'agents');
+$agentCount = getCount($conn, 'agents2');
 $supervisorCount = getCount($conn, 'supervisors');
 
 // Recent audits (global, completed only)
@@ -32,7 +32,7 @@ if ($recentResult && $recentResult->num_rows > 0) {
 
 // --- Random Agent Audit Feature ---
 if (isset($_GET['random_audit'])) {
-    $result = $conn->query("SELECT agent_firstname, agent_lastname FROM agents ORDER BY RAND() LIMIT 1");
+    $result = $conn->query("SELECT agent_firstname, agent_lastname FROM agents2 ORDER BY RAND() LIMIT 1");
     if ($result && $row = $result->fetch_assoc()) {
         $agentName = $row['agent_firstname'] . ' ' . $row['agent_lastname'];
         header("Location: AuditorAuditForm.php?agent=" . urlencode($agentName));
@@ -198,19 +198,23 @@ if (isset($_GET['random_audit'])) {
                </div>
             </div>
 
-            <div>
-               <h3 class="sidebar__title">TOOLS</h3>
-               <div class="sidebar__list">
-                  <a href="#" class="sidebar__link">
-                     <i class="ri-mail-unread-fill"></i>
-                     <span>My Messages</span>
-                  </a>
-                  <a href="#" class="sidebar__link">
-                     <i class="ri-notification-2-fill"></i>
-                     <span>Notifications</span>
-                  </a>
-               </div>
+         <div>
+            <h3 class="sidebar__title"></h3>
+            <div class="sidebar__list">
+               <a href="AdminTools.php" class="sidebar__link">
+                  <i class=""></i>
+                  <span></span>
+               </a>
+               <a href="#" class="sidebar__link">
+                  <i class=""></i>
+                  <span></span>
+               </a>
+               <a href="#" class="sidebar__link">
+                  <i class=""></i>
+                  <span></span>
+               </a>
             </div>
+         </div>
          </div>
 
          <div class="sidebar__actions">

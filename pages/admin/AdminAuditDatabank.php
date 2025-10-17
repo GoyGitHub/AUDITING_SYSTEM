@@ -318,7 +318,6 @@ $displayName = ucfirst($username) . '.';
                </a>
             </div>
          </div>
-
          <div>
             <h3 class="sidebar__title">TOOLS</h3>
             <div class="sidebar__list">
@@ -326,17 +325,10 @@ $displayName = ucfirst($username) . '.';
                   <i class="ri-settings-3-fill"></i>
                   <span>Admin Tools</span>
                </a>
-               <a href="#" class="sidebar__link">
-                  <i class="ri-mail-unread-fill"></i>
-                  <span>My Messages</span>
-               </a>
-               <a href="#" class="sidebar__link">
-                  <i class="ri-notification-2-fill"></i>
-                  <span>Notifications</span>
-               </a>
             </div>
          </div>
       </div>
+
 
          <div class="sidebar__actions">
             <button>
@@ -388,6 +380,24 @@ if ($result->num_rows > 0) {
          $status = "Failed";
          $statusClass = "failed";
       }
+      // --- NEW: compute score (each "Yes" = 10 points) ---
+      $score = 0;
+      for ($i = 1; $i <= 10; $i++) {
+         $ans = strtolower(trim($row["q{$i}"] ?? ''));
+         if ($ans === 'yes') $score += 10;
+      }
+      $scoreLabel = $score . " / 100";
+
+      // choose a badge class for score display (reuse existing classes)
+      if ($score >= 90) {
+         $scoreClass = "audit-status completed";
+      } elseif ($score >= 75) {
+         $scoreClass = "audit-status incomplete";
+      } elseif ($score >= 50) {
+         $scoreClass = "audit-status incomplete";
+      } else {
+         $scoreClass = "audit-status failed";
+      }
       $cardId = "auditq-" . $row['id'];
 ?>
       <div class="audit-card collapsed" id="card-<?php echo $row['id']; ?>">
@@ -428,6 +438,10 @@ if ($result->num_rows > 0) {
             <div class="audit-header-info">
                <label>Account #:</label> <?php echo htmlspecialchars($row['account_number']); ?>
             </div>
+            <div class="audit-header-info">
+               <label>Score:</label>
+               <span class="<?php echo $scoreClass; ?>"><?php echo $scoreLabel; ?></span>
+            </div>
             <!-- Delete button stays at the top right -->
             <div class="audit-actions">
                <a href='../../conditions/delete.php?id=<?php echo $row['id']; ?>'
@@ -444,6 +458,7 @@ if ($result->num_rows > 0) {
                <tr>
                   <th>Audit Criteria</th>
                   <th>Answer</th>
+                  <th>Points</th>
                </tr>
             </thead>
             <tbody>
@@ -451,11 +466,19 @@ if ($result->num_rows > 0) {
                foreach ($questions as $i => $q) {
                   $num = $i + 1;
                   $ans = htmlspecialchars($row["q$num"]);
+                  $point = (strtolower(trim($row["q$num"] ?? '')) === 'yes') ? 10 : 0;
                   echo "<tr>
                      <td>$q</td>
                      <td>$ans</td>
+                     <td style='font-weight:700; text-align:center;'>$point</td>
                   </tr>";
                }
+               // show total row
+               echo "<tr style='background:#f5f7fb;'>
+                       <td style='font-weight:800;'>Total</td>
+                       <td></td>
+                       <td style='font-weight:800; text-align:center;'>{$scoreLabel}</td>
+                     </tr>";
                ?>
             </tbody>
          </table>

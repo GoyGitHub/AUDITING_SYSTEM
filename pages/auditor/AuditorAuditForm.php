@@ -430,19 +430,23 @@ if ($agents_result_slide && $agents_result_slide->num_rows > 0) {
                     </div>
                 </div>
 
-                <div>
-                    <h3 class="sidebar__title">TOOLS</h3>
-                    <div class="sidebar__list">
-                        <a href="#" class="sidebar__link">
-                            <i class="ri-mail-unread-fill"></i>
-                            <span>My Messages</span>
-                        </a>
-                        <a href="#" class="sidebar__link">
-                            <i class="ri-notification-2-fill"></i>
-                            <span>Notifications</span>
-                        </a>
-                    </div>
-                </div>
+         <div>
+            <h3 class="sidebar__title"></h3>
+            <div class="sidebar__list">
+               <a href="AdminTools.php" class="sidebar__link">
+                  <i class=""></i>
+                  <span></span>
+               </a>
+               <a href="#" class="sidebar__link">
+                  <i class=""></i>
+                  <span></span>
+               </a>
+               <a href="#" class="sidebar__link">
+                  <i class=""></i>
+                  <span></span>
+               </a>
+            </div>
+         </div>
             </div>
 
          <div class="sidebar__actions">
@@ -727,8 +731,13 @@ if ($agents_result_slide && $agents_result_slide->num_rows > 0) {
                     // Get last inserted audit id
                     $audit_id = $conn->insert_id;
                     $supervisor_comment = $_POST['supervisor_comment'];
+                    // Append filed-by info (auditor who is the reviewer on this audit)
+                    $filedByRole = "Auditor";
+                    $filedByName = $reviewer; // reviewer selected on the form
+                    $comment_with_filer = $supervisor_comment . " (Filed by: {$filedByRole} - {$filedByName})";
+
                     $stmt2 = $conn->prepare("INSERT INTO supervisor_comments (audit_id, agent_name, reviewer_name, comment) VALUES (?, ?, ?, ?)");
-                    $stmt2->bind_param("isss", $audit_id, $agent, $reviewer, $supervisor_comment);
+                    $stmt2->bind_param("isss", $audit_id, $agent, $reviewer, $comment_with_filer);
                     $stmt2->execute();
                     $stmt2->close();
                 }

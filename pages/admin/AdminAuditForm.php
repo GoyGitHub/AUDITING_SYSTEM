@@ -57,7 +57,7 @@ $agents_result = mysqli_query($conn, $agents_query);
         /* --- Main Redesign --- */
         body {
             font-family: 'Nunito Sans', sans-serif;
-            background: linear-gradient(120deg, #e0e7ff 0%, #f8fafc 100%);
+            background: #fff; /* changed to white */
             margin: 0;
             padding: 0;
         }
@@ -331,24 +331,17 @@ $agents_result = mysqli_query($conn, $agents_query);
                     </div>
                 </div>
 
-                <div>
-                    <h3 class="sidebar__title">TOOLS</h3>
-                    <div class="sidebar__list">
-                        <a href="AdminTools.php" class="sidebar__link">
-                            <i class="ri-settings-3-fill"></i>
-                            <span>Admin Tools</span>
-                        </a>
-                        <a href="#" class="sidebar__link">
-                            <i class="ri-mail-unread-fill"></i>
-                            <span>My Messages</span>
-                        </a>
-                        <a href="#" class="sidebar__link">
-                            <i class="ri-notification-2-fill"></i>
-                            <span>Notifications</span>
-                        </a>
-                    </div>
-                </div>
+         <div>
+            <h3 class="sidebar__title">TOOLS</h3>
+            <div class="sidebar__list">
+               <a href="AdminTools.php" class="sidebar__link">
+                  <i class="ri-settings-3-fill"></i>
+                  <span>Admin Tools</span>
+               </a>
             </div>
+         </div>
+      </div>
+        
 
          <div class="sidebar__actions">
             <button>
@@ -525,6 +518,21 @@ $agents_result = mysqli_query($conn, $agents_query);
             );
 
             if ($stmt->execute()) {
+                // After audit submission, handle supervisor comment
+                if (!empty($_POST['supervisor_comment'])) {
+                    // Get last inserted audit id
+                    $audit_id = $conn->insert_id;
+                    $supervisor_comment = $_POST['supervisor_comment'];
+                    // Append filed-by info (auditor who is the reviewer on this audit)
+                    $filedByRole = "Auditor";
+                    $filedByName = $reviewer; // reviewer selected on the form
+                    $comment_with_filer = $supervisor_comment . " (Filed by: {$filedByRole} - {$filedByName})";
+
+                    $stmt2 = $conn->prepare("INSERT INTO supervisor_comments (audit_id, agent_name, reviewer_name, comment) VALUES (?, ?, ?, ?)");
+                    $stmt2->bind_param("isss", $audit_id, $agent, $reviewer, $comment_with_filer);
+                    $stmt2->execute();
+                    $stmt2->close();
+                }
                 echo "<script>
                     document.addEventListener('DOMContentLoaded', function() {
                         const n = document.getElementById('notification');
