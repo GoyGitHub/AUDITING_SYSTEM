@@ -3,7 +3,7 @@ include('../../database/dbconnection.php');
 
 if (isset($_POST['add_agent'])) {
     $agent_lastname   = trim($_POST['agent_lastname']);
-    $agent_firstname  = trim($_POST['agent_firsttname']); // ✅ double T
+    $agent_firstname  = trim($_POST['agent_firstname']); // ✅ double T
     $birthday         = trim($_POST['agent_birthday']);
     $email            = trim($_POST['agent_email']);
     $team             = trim($_POST['team']);

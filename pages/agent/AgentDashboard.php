@@ -11,43 +11,52 @@ $username = $_SESSION['username'] ?? '';
 $role = ucfirst($_SESSION['user_role'] ?? 'User');
 $displayName = ucfirst($username) . '.';
 
-// --- Resolve current agent by session (try full name or email) ---
+// --- Resolve current agent by session (try multiple matching strategies, case-insensitive) ---
 $agentId = null;
 $agentFullName = $displayName;
 $agentEmail = '';
 $agentTeam = '';
 
-if (!empty($username)) {
-    $stmtA = $conn->prepare("
-        SELECT id, agent_firstname, agent_lastname, email, team
-        FROM agents2
-        WHERE CONCAT(agent_firstname, ' ', agent_lastname) = ? OR email = ?
-        LIMIT 1
-    ");
-    if ($stmtA) {
-        $stmtA->bind_param("ss", $username, $username);
-        $stmtA->execute();
-        $resA = $stmtA->get_result();
-        if ($resA && $rowA = $resA->fetch_assoc()) {
-            $agentId = (int)$rowA['id'];
-            $agentFullName = $rowA['agent_firstname'] . ' ' . $rowA['agent_lastname'];
-            $agentEmail = $rowA['email'] ?? '';
-            $agentTeam = $rowA['team'] ?? '';
-        }
-        $stmtA->close();
+// normalize username for comparisons
+$uname = trim((string)($_SESSION['username'] ?? ''));
+$uname_l = mb_strtolower($uname);
+
+// Try matching by email, full name or firstname (case-insensitive)
+$stmtA = $conn->prepare("
+    SELECT id, agent_firstname, agent_lastname, email, team
+    FROM agents2
+    WHERE LOWER(CONCAT(agent_firstname, ' ', agent_lastname)) = ?
+       OR LOWER(agent_firstname) = ?
+       OR LOWER(agent_firstname) = ?
+       OR LOWER(email) = ?
+    LIMIT 1
+");
+if ($stmtA) {
+    // prepare three forms of the username to try:
+    // 1) exact username (may be firstname or full name)
+    // 2) username as-is
+    // 3) username (redundant placeholder to satisfy bind count)
+    $tryFull = mb_strtolower($uname);
+    $tryFirst = mb_strtolower($uname);
+    $tryEmail = mb_strtolower($uname);
+    $stmtA->bind_param("ssss", $tryFull, $tryFirst, $tryFirst, $tryEmail);
+    $stmtA->execute();
+    $resA = $stmtA->get_result();
+    if ($resA && $rowA = $resA->fetch_assoc()) {
+        $agentId = (int)$rowA['id'];
+        $agentFullName = $rowA['agent_firstname'] . ' ' . $rowA['agent_lastname'];
+        $agentEmail = $rowA['email'] ?? '';
+        $agentTeam = $rowA['team'] ?? '';
     }
+    $stmtA->close();
 }
 
-// Fallback: if no agent match, try displayName (without trailing dot)
-if (!$agentId) {
-    $tryName = rtrim($displayName, '.');
-    $stmtB = $conn->prepare("
-        SELECT id, agent_firstname, agent_lastname, email, team
-        FROM agents2
-        WHERE CONCAT(agent_firstname, ' ', agent_lastname) = ? LIMIT 1
-    ");
+// Fallback: if still no match, try matching by username==firstname case-insensitive explicitly
+if (!$agentId && $uname !== '') {
+    $stmtB = $conn->prepare("SELECT id, agent_firstname, agent_lastname, email, team FROM agents2 WHERE LOWER(agent_firstname) = ? LIMIT 1");
     if ($stmtB) {
-        $stmtB->bind_param("s", $tryName);
+        $t = mb_strtolower($uname);
+        $stmtB->bind_param("s", $t);
         $stmtB->execute();
         $resB = $stmtB->get_result();
         if ($resB && $rowB = $resB->fetch_assoc()) {
@@ -204,10 +213,6 @@ $agentFound = !empty($agentId) || (!empty($agentFullName) && !empty($agentEmail)
             Team: <?php echo htmlspecialchars($agentTeam ?: 'N/A'); ?> &nbsp; • &nbsp;
             Email: <?php echo htmlspecialchars($agentEmail ?: 'N/A'); ?>
          </div>
-      </div>
-      <div class="actions">
-         <a class="small-btn ghost" href="AgentProfile.php">Edit Profile</a>
-         <a class="small-btn" href="AgentMyAudits.php">My Audits</a>
       </div>
    </div>
 

@@ -3,7 +3,7 @@ include('../../database/dbconnection.php');
 
 if (isset($_POST['add_auditor'])) {
     $auditor_firstname = trim($_POST['auditor_firstname']);
-    $auditor_lastname  = trim($_POST['auditor_lasttname']); // ✅ double T
+    $auditor_lastname  = trim($_POST['auditor_lastname']); // ✅ double T
     $birthday          = trim($_POST['auditor_birthday']);
     $email             = trim($_POST['auditor_email']);
     $department        = trim($_POST['department']);

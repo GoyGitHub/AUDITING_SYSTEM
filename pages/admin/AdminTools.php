@@ -137,6 +137,77 @@ if (isset($_POST['add_person'])) {
     }
 }
 
+// --- Account CRUD: delete, edit fetch, update ---
+$editUser = null;
+$accountNotice = '';
+
+// Delete account
+if (isset($_GET['delete_account'])) {
+    $delId = intval($_GET['delete_account']);
+    $delStmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+    if ($delStmt) {
+        $delStmt->bind_param("i", $delId);
+        $delStmt->execute();
+        $delStmt->close();
+        header("Location: AdminTools.php");
+        exit();
+    } else {
+        $accountNotice = "Error deleting account: " . $conn->error;
+    }
+}
+
+// Fetch account for editing
+if (isset($_GET['edit_account'])) {
+    $editId = intval($_GET['edit_account']);
+    $s = $conn->prepare("SELECT id, username, password, role FROM users WHERE id = ? LIMIT 1");
+    if ($s) {
+        $s->bind_param("i", $editId);
+        $s->execute();
+        $res = $s->get_result();
+        if ($res && $row = $res->fetch_assoc()) {
+            $editUser = $row;
+        }
+        $s->close();
+    }
+}
+
+// Update account
+if (isset($_POST['update_account'])) {
+    $uid = intval($_POST['user_id'] ?? 0);
+    $uname = trim($_POST['edit_username'] ?? '');
+    $urole = trim($_POST['edit_role'] ?? '');
+    $upass = $_POST['edit_password'] ?? '';
+
+    if ($uid && $uname && $urole) {
+        // If password left blank, keep existing; otherwise update with new
+        if ($upass === '') {
+            $stmt = $conn->prepare("UPDATE users SET username = ?, role = ? WHERE id = ?");
+            $stmt->bind_param("ssi", $uname, $urole, $uid);
+        } else {
+            // keep this simple — store provided password (existing DB has plain text)
+            $stmt = $conn->prepare("UPDATE users SET username = ?, password = ?, role = ? WHERE id = ?");
+            $stmt->bind_param("sssi", $uname, $upass, $urole, $uid);
+        }
+        if ($stmt->execute()) {
+            $accountNotice = "Account updated.";
+            $stmt->close();
+            header("Location: AdminTools.php");
+            exit();
+        } else {
+            $accountNotice = "Error updating account: " . $stmt->error;
+        }
+    } else {
+        $accountNotice = "Please fill required account fields.";
+    }
+}
+
+// Fetch users list for display
+$users_list = [];
+$ures = $conn->query("SELECT id, username, role, created_at FROM users ORDER BY id DESC");
+if ($ures && $ures->num_rows) {
+    while ($ur = $ures->fetch_assoc()) $users_list[] = $ur;
+}
+
 // Dashboard summary counts
 function getCount($conn, $table) {
     $result = $conn->query("SELECT COUNT(*) as cnt FROM $table");
@@ -198,7 +269,7 @@ $accountCount = getCount($conn, 'users');
 }
 
 .dashboard-buttons a {
-    padding: 2.5rem 6.5rem;
+    padding: 2.5rem 2.3rem;
     background-color: #003366;
     color: #fff;
     text-decoration: none;
@@ -499,6 +570,30 @@ $accountCount = getCount($conn, 'users');
             </a>
          </div>
 
+
+
+         <!-- Edit Account Modal (reuses Add Account modal markup, opens when editUser exists) -->
+         <div id="editAccountModal" class="modal" style="display:none;">
+            <div class="modal-content">
+               <span class="close" onclick="closeEditModal()">&times;</span>
+               <h2>Edit Account</h2>
+               <form method="POST" action="AdminTools.php">
+                  <input type="hidden" name="user_id" value="<?php echo htmlspecialchars($editUser['id'] ?? ''); ?>" />
+                  <input type="text" name="edit_username" placeholder="Username" required value="<?php echo htmlspecialchars($editUser['username'] ?? ''); ?>">
+                  <input type="password" name="edit_password" placeholder="Leave blank to keep current password">
+                  <select name="edit_role" required>
+                     <option value="" disabled>Select Role</option>
+                     <option value="admin" <?php if (($editUser['role'] ?? '') === 'admin') echo 'selected'; ?>>Admin</option>
+                     <option value="auditor" <?php if (($editUser['role'] ?? '') === 'auditor') echo 'selected'; ?>>Auditor</option>
+                     <option value="supervisor" <?php if (($editUser['role'] ?? '') === 'supervisor') echo 'selected'; ?>>Supervisor</option>
+                     <option value="data_analyst" <?php if (($editUser['role'] ?? '') === 'data_analyst') echo 'selected'; ?>>Data Analyst</option>
+                     <option value="agent" <?php if (($editUser['role'] ?? '') === 'agent') echo 'selected'; ?>>Agent</option>
+                  </select>
+                  <button type="submit" name="update_account" style="margin-top:12px;">Update Account</button>
+               </form>
+            </div>
+         </div>
+
       </section>
 
    </main>
@@ -640,6 +735,22 @@ window.onclick = function(event) {
     if(event.target === personnelModal) personnelModal.style.display = "none";
     if(event.target === accountModal) accountModal.style.display = "none";
 }
+
+// ---------- Close Edit Modal ----------
+function closeEditModal() {
+    document.getElementById('editAccountModal').style.display = 'none';
+}
+// Auto open edit modal if server populated $editUser
+<?php if ($editUser): ?>
+document.addEventListener('DOMContentLoaded', function(){
+    document.getElementById('editAccountModal').style.display = 'flex';
+});
+<?php endif; ?>
+// modal click outside close
+window.onclick = function(event) {
+    const modal = document.getElementById('editAccountModal');
+    if (modal && event.target === modal) modal.style.display = 'none';
+};
 </script>
 
 

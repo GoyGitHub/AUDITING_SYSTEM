@@ -1,212 +1,144 @@
-<?php 
-include('../../database/dbconnection.php'); 
-
-// ✅ Load session user details safely
-if (session_status() === PHP_SESSION_NONE) {
-    session_start();
-}
-
-// Pull data from session
-$username = $_SESSION['username'] ?? 'User';
-$role = ucfirst($_SESSION['user_role'] ?? 'User');
+<?php
+include('../../database/dbconnection.php');
+if (session_status() === PHP_SESSION_NONE) session_start();
+$username = $_SESSION['username'] ?? 'Admin';
+$role = ucfirst($_SESSION['user_role'] ?? 'Admin');
 $displayName = ucfirst($username) . '.';
+$notice = '';
 
-/* ----------------------------
-   DELETE ACCOUNT
----------------------------- */
+// Delete account (POST)
 if (isset($_POST['delete_account'])) {
-    $userId = intval($_POST['user_id']);
+    $userId = intval($_POST['user_id'] ?? 0);
     if ($userId > 0) {
-        $deleteQuery = $conn->prepare("DELETE FROM users WHERE id = ?");
-        $deleteQuery->bind_param("i", $userId);
-        $deleteQuery->execute();
-        $deleteQuery->close();
-        echo "<script>alert('🗑️ Account deleted successfully!'); window.location.href=window.location.href;</script>";
+        $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+        if ($stmt) {
+            $stmt->bind_param("i", $userId);
+            $stmt->execute();
+            $stmt->close();
+            $notice = "Account deleted.";
+        } else {
+            $notice = "Delete error: " . $conn->error;
+        }
     }
 }
 
-/* ----------------------------
-   EDIT ACCOUNT (UPDATE)
----------------------------- */
+// Update account (POST)
 if (isset($_POST['update_account'])) {
-    $userId   = intval($_POST['id']);
-    $username = trim($_POST['username']);
-    $password = trim($_POST['password']);
-    $role     = trim($_POST['role']);
-
-    if ($userId > 0 && $username !== "" && $password !== "" && $role !== "") {
-        $updateQuery = $conn->prepare("UPDATE users SET username=?, password=?, role=? WHERE id=?");
-        $updateQuery->bind_param("sssi", $username, $password, $role, $userId);
-        $updateQuery->execute();
-        $updateQuery->close();
-        echo "<script>alert('✅ Account updated successfully!'); window.location.href=window.location.href;</script>";
+    $userId = intval($_POST['id'] ?? 0);
+    $uname = trim($_POST['username'] ?? '');
+    $upass = trim($_POST['password'] ?? '');
+    $urole = trim($_POST['role'] ?? '');
+    if ($userId && $uname !== '' && $urole !== '') {
+        if ($upass === '') {
+            $uStmt = $conn->prepare("UPDATE users SET username = ?, role = ? WHERE id = ?");
+            $uStmt->bind_param("ssi", $uname, $urole, $userId);
+        } else {
+            $uStmt = $conn->prepare("UPDATE users SET username = ?, password = ?, role = ? WHERE id = ?");
+            $uStmt->bind_param("sssi", $uname, $upass, $urole, $userId);
+        }
+        if ($uStmt->execute()) {
+            $notice = "Account updated.";
+        } else {
+            $notice = "Update error: " . $uStmt->error;
+        }
+        $uStmt->close();
+    } else {
+        $notice = "Please fill required fields.";
     }
+}
+
+// Fetch users and left-join agents2 on username = agent_firstname
+$sql = "
+SELECT u.id as uid, u.username, u.role, u.created_at,
+       a.id AS agent_id, a.agent_firstname, a.agent_lastname, a.email AS agent_email, a.team AS agent_team, a.birthday AS agent_birthday
+FROM users u
+LEFT JOIN agents2 a ON u.username = a.agent_firstname
+ORDER BY u.created_at DESC
+";
+$res = $conn->query($sql);
+$users = [];
+if ($res && $res->num_rows) {
+    while ($r = $res->fetch_assoc()) $users[] = $r;
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-   <meta charset="UTF-8">
-   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Admin — List of Accounts</title>
+<link rel="stylesheet" href="../../assets/css/styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.2.0/remixicon.css">
+<style>
+.container { max-width:1200px; margin:90px auto 40px; padding: 1rem; margin-left:320px; }
+.card { background:#fff; border-radius:12px; padding:1.25rem; box-shadow:0 6px 18px rgba(0,0,0,0.06); }
+.table { max-width: 920px; margin: 0 auto; width:100%; border-collapse:collapse; }
+.table th, .table td { padding:0.9rem; border-bottom:1px solid #eee; vertical-align:middle; }
+.table thead th { background:#f5f7fb; color:#003366; text-align:left; }
+.actions { text-align:right; }
+.btn { padding:8px 12px; border-radius:8px; background:#1976d2; color:#fff; text-decoration:none; display:inline-block; }
+.btn.danger { background:#d32f2f; }
+.info { color:#666; font-size:0.95rem; }
+.badge { display:inline-block; padding:6px 10px; border-radius:999px; font-weight:700; }
+.incomplete { background:#fff3cd; color:#856404; }
+.complete { background:#e6f4ea; color:#2e7d32; }
+.edit-form { background:#fbfbff; padding:12px; border-radius:8px; border:1px solid #eef; }
 
-   <!--=============== GOOGLE FONT ===============-->
-   <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans&display=swap" rel="stylesheet">
-
-   <!--=============== REMIXICONS ===============-->
-   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.2.0/remixicon.css">
-
-   <!--=============== CSS ===============-->
-   <link rel="stylesheet" href="../../assets/css/styles.css">
-
-   <style>
-      table {
-         width: 100%;
-         border-collapse: collapse;
-         font-family: 'Nunito Sans', sans-serif;
-         color:#0d1b3d;
-      }
-      th, td {
-         padding: 12px;
-         border-bottom: 1px solid #eee;
-         text-align: left;
-      }
-      thead {
-         background-color:#f9f9f9;
-      }
-      .action-links form {
-         display: inline;
-      }
-      .edit-link { color: blue; cursor:pointer; }
-      .delete-link { color: red; cursor:pointer; border:none; background:none; }
-      .edit-form input, .edit-form select {
-         margin: 4px 0;
-         padding: 6px;
-         border: 1px solid #ccc;
-         border-radius: 6px;
-      }
-      .edit-form button {
-         padding: 6px 12px;
-         border:none;
-         border-radius:6px;
-         cursor:pointer;
-         margin-top: 4px;
-      }
-      .edit-form .save { background: #007bff; color:#fff; }
-      .edit-form .cancel { background: #ccc; }
-      
-      .header__buttons button {
-   background: none;
-   border: none;
-   cursor: pointer;
-   font-size: 1.5rem; /* makes icon bigger */
-   padding: 0.1px;
-   margin-right: 1px;
-   color: #0d1b3d; /* same as your theme */
-   display: flex;
-   align-items: center;
-   justify-content: center;
+/* center the main card/table slightly and limit width for better reading */
+.center-wrap {
+    max-width: 980px;
+    margin: 40px auto;
+    padding: 0 16px;
 }
 
-.header__buttons {
-   display: flex;
-   align-items: center;
-   gap: 8px; /* space between buttons */
+/* ensure sidebar actions (logout) are visible and pinned to bottom */
+.sidebar__container { position: relative; min-height: 100vh; padding-bottom: 90px; }
+.sidebar__actions {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
+    z-index: 2000;
 }
 
-.edit-form form {
-   background: #fdfdfd;
-   border: 1px solid #eee;
-   border-radius: 8px;
-   padding: 16px;
-   display: flex;
-   flex-direction: column;
-   gap: 10px;
-   font-size: 0.95rem;
+/* slightly narrow table and center card content */
+.card { padding: 1.25rem; border-radius:12px; background:#fff; box-shadow:0 6px 18px rgba(0,0,0,0.06); }
+.table { max-width: 920px; margin: 0 auto; width:100%; }
+
+/* Column alignment: Username (col1) left, Role+Created center, Agent Info left, Actions right */
+.table th, .table td { padding:0.9rem; border-bottom:1px solid #eee; vertical-align:middle; }
+.table thead th { text-align:left; }
+.table th:nth-child(1), .table td:nth-child(1) { text-align:left; }
+.table th:nth-child(2), .table td:nth-child(2),
+.table th:nth-child(3), .table td:nth-child(3) { text-align:center; }
+.table th:nth-child(4), .table td:nth-child(4) { text-align:left; }
+.table th:nth-child(5), .table td:nth-child(5) { text-align:right; width:220px; }
+
+/* Truncate long agent info for neat display */
+.table td:nth-child(4) { max-width: 360px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Responsive tweaks */
+@media (max-width:900px){
+    .center-wrap { padding: 12px; margin-left:16px; margin-right:16px; }
+    .sidebar__actions { position: static; padding-top: 12px; }
+    .table thead th, .table td { text-align:left; }
+    .table th:nth-child(5), .table td:nth-child(5) { text-align:left; width:auto; }
+    .table td:nth-child(4) { white-space:normal; }
 }
-
-.edit-form label {
-   font-weight: 600;
-   margin-top: 6px;
-   color: #0d1b3d;
-}
-
-.edit-form input,
-.edit-form select {
-   padding: 8px;
-   border-radius: 6px;
-   border: 1px solid #ccc;
-   width: 100%;
-}
-
-.form-actions {
-   display: flex;
-   gap: 10px;
-   margin-top: 8px;
-}
-
-.edit-form .save {
-   background: #007bff;
-   color: #fff;
-   padding: 8px 14px;
-   border: none;
-   border-radius: 6px;
-   cursor: pointer;
-   transition: 0.2s;
-}
-
-.edit-form .save:hover {
-   background: #0056b3;
-}
-
-.edit-form .cancel {
-   background: #ccc;
-   color: #333;
-   padding: 8px 14px;
-   border: none;
-   border-radius: 6px;
-   cursor: pointer;
-   transition: 0.2s;
-}
-
-.edit-form .cancel:hover {
-   background: #999;
-   color: #fff;
-}
-
-
-   </style>
-
-   <title>Admin - List of Accounts</title>
+</style>
 </head>
 <body>
-
-<!--=============== HEADER ===============-->
 <header class="header" id="header">
    <div class="header__container">
-      <div class="header__buttons">
-         <!-- Sidebar Toggle -->
-         <button class="header__toggle" id="header-toggle">
-            <i class="ri-menu-line"></i>
-         </button>
-
-         <!-- Back Button -->
-         <button class="header__back" onclick="history.back()">
-            <i class="ri-arrow-left-line"></i>
-         </button>
-      </div>
-
-      <!-- Logo -->
-      <a href="https://yourlink.com" class="header__logo">
-         <img src="../../assets/img/logo.png" alt="Logo" style="height: 40px;">
-      </a>
+      <button class="header__toggle" id="header-toggle"><i class="ri-menu-line"></i></button>
+      <a href="#" class="header__logo"><img src="../../assets/img/logo.png" alt="Logo" style="height:40px;"></a>
    </div>
 </header>
-
-
-
-   <!--=============== SIDEBAR ===============-->
-   <nav class="sidebar" id="sidebar">
+<nav class="sidebar" id="sidebar">
       <div class="sidebar__container">
          <div class="sidebar__user">
             <div class="sidebar__img">
@@ -249,7 +181,7 @@ if (isset($_POST['update_account'])) {
          <div>
             <h3 class="sidebar__title">TOOLS</h3>
             <div class="sidebar__list">
-               <a href="AdminTools.php" class="sidebar__link">
+               <a href="AdminTools.php" class="sidebar__link active-link">
                   <i class="ri-settings-3-fill"></i>
                   <span>Admin Tools</span>
                </a>
@@ -272,121 +204,106 @@ if (isset($_POST['update_account'])) {
       </div>
    </nav>
 
+<main class="container">
+   <div class="center-wrap">
+      <div class="card">
+         <h2>List of Accounts</h2>
+         <?php if ($notice): ?><div style="padding:8px;background:#eaf4ff;border-radius:8px;margin-bottom:12px;"><?php echo htmlspecialchars($notice); ?></div><?php endif; ?>
+         <div style="overflow-x:auto;">
+            <table class="table">
+               <thead>
+                  <tr>
+                     <th>Username</th>
+                     <th>Role</th>
+                     <th>Created</th>
+                     <th>Agent Info</th>
+                     <th class="actions">Actions</th>
+                  </tr>
+               </thead>
+               <tbody>
+                  <?php if (count($users)): foreach ($users as $u): 
+                     // determine agent completeness
+                     $agentComplete = (!empty($u['agent_email']) && !empty($u['agent_team']) && !empty($u['agent_birthday']));
+                     $agentLabel = $u['agent_firstname'] ? ($u['agent_firstname'] . ' ' . ($u['agent_lastname'] ?? '')) : '';
+                  ?>
+                  <tr>
+                     <td><?php echo htmlspecialchars($u['username']); ?></td>
+                     <td><?php echo htmlspecialchars($u['role']); ?></td>
+                     <td><?php echo htmlspecialchars($u['created_at']); ?></td>
+                     <td>
+                        <?php if ($agentLabel): ?>
+                           <div style="font-weight:700;"><?php echo htmlspecialchars($agentLabel); ?></div>
+                           <div class="info">Email: <?php echo $u['agent_email'] ? htmlspecialchars($u['agent_email']) : '<span style="color:#c00;">(missing)</span>'; ?></div>
+                           <div class="info">Team: <?php echo $u['agent_team'] ? htmlspecialchars($u['agent_team']) : '<span style="color:#c00;">(missing)</span>'; ?></div>
+                           <div class="info">Birthday: <?php echo $u['agent_birthday'] ? htmlspecialchars($u['agent_birthday']) : '<span style="color:#c00;">(missing)</span>'; ?></div>
+                           <div style="margin-top:6px;">
+                              <span class="badge <?php echo $agentComplete ? 'complete' : 'incomplete'; ?>"><?php echo $agentComplete ? 'Complete' : 'Incomplete'; ?></span>
+                           </div>
+                        <?php else: ?>
+                           <div class="info" style="color:#c00;font-weight:700;">No agent match for this username</div>
+                        <?php endif; ?>
+                     </td>
+                     <td class="actions">
+                        <!-- Edit toggle -->
+                        <a href="javascript:void(0)" onclick="toggleEdit(<?php echo $u['uid']; ?>)" style="margin-right:10px;color:#1976d2;font-weight:600;text-decoration:none;">Edit</a>
 
-<!--=============== MAIN CONTENT ===============-->
-<main class="main container" id="main">
-   <h1 style="margin-bottom: 20px; font-family:'Nunito Sans', sans-serif; color:#0d1b3d;">List of Accounts</h1>
+                        <!-- Delete form -->
+                        <form method="POST" style="display:inline;" onsubmit="return confirm('Delete this account?');">
+                           <input type="hidden" name="user_id" value="<?php echo $u['uid']; ?>">
+                           <button type="submit" name="delete_account" class="btn danger">Delete</button>
+                        </form>
+                     </td>
+                  </tr>
 
-   <div class="table-container" style="overflow-x:auto; background:#fff; border-radius:12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); padding: 24px;">
-      <table>
-<thead>
-   <tr>
-      <th>#</th>
-      <th>Username</th>
-      <th>Password</th>
-      <th>Role</th>
-      <th>Created At</th>
-      <th>Actions</th>
-   </tr>
-</thead>
-<tbody>
-<?php
-   $sql = "SELECT * FROM users ORDER BY created_at ASC";
-   $result = $conn->query($sql);
+                  <!-- Inline edit form row (hidden by default) -->
+                  <tr id="edit-row-<?php echo $u['uid']; ?>" style="display:none;">
+                     <td colspan="5">
+                        <form method="POST" class="edit-form">
+                           <input type="hidden" name="id" value="<?php echo $u['uid']; ?>">
+                           <div style="display:flex; gap:12px; flex-wrap:wrap;">
+                              <div style="flex:1;min-width:200px;">
+                                 <label>Username</label>
+                                 <input type="text" name="username" value="<?php echo htmlspecialchars($u['username']); ?>" required>
+                              </div>
+                              <div style="flex:1;min-width:160px;">
+                                 <label>Password (leave blank to keep)</label>
+                                 <input type="text" name="password" placeholder="New password">
+                              </div>
+                              <div style="flex:1;min-width:160px;">
+                                 <label>Role</label>
+                                 <select name="role" required>
+                                    <option value="admin" <?php if ($u['role']=='admin') echo 'selected'; ?>>admin</option>
+                                    <option value="auditor" <?php if ($u['role']=='auditor') echo 'selected'; ?>>auditor</option>
+                                    <option value="supervisor" <?php if ($u['role']=='supervisor') echo 'selected'; ?>>supervisor</option>
+                                    <option value="data_analyst" <?php if ($u['role']=='data_analyst') echo 'selected'; ?>>data_analyst</option>
+                                    <option value="agent" <?php if ($u['role']=='agent') echo 'selected'; ?>>agent</option>
+                                 </select>
+                              </div>
+                           </div>
+                           <div style="margin-top:12px; display:flex; gap:8px;">
+                              <button type="submit" name="update_account" class="btn">Save</button>
+                              <button type="button" onclick="toggleEdit(<?php echo $u['uid']; ?>)" style="padding:8px 12px;border-radius:8px;border:1px solid #ccc;background:#fff;cursor:pointer;">Cancel</button>
+                           </div>
+                        </form>
+                     </td>
+                  </tr>
 
-   if ($result->num_rows > 0) {
-      $counter = 1;
-      while($row = $result->fetch_assoc()) {
-         echo "<tr>";
-         echo "<td>" . $counter++ . "</td>";
-         echo "<td>" . htmlspecialchars($row['username']) . "</td>";
-         echo "<td>" . htmlspecialchars($row['password']) . "</td>";
-         echo "<td>" . htmlspecialchars($row['role']) . "</td>";
-         echo "<td>" . htmlspecialchars($row['created_at']) . "</td>";
-         echo "<td class='action-links'>
-                  <a class='edit-link' onclick=\"toggleEdit(".$row['id'].")\">Edit</a>
-                  <a href='?delete=" . $row['id'] . "' onclick=\"return confirm('Are you sure you want to delete this account?');\" class='delete-link'>Delete</a>
-               </td>";
-         echo "</tr>";
-
-// Inline edit form (hidden by default)
-echo "<tr id='edit-form-".$row['id']."' class='edit-form' style='display:none;'>
-         <td colspan='6'>
-            <form method='POST'>
-               <input type='hidden' name='id' value='".$row['id']."'>
-               <label>Username:</label>
-               <input type='text' name='username' value='".htmlspecialchars($row['username'])."' required>
-               <label>Password:</label>
-               <input type='text' name='password' value='".htmlspecialchars($row['password'])."' required>
-               <label>Role:</label>
-               <select name='role' required>
-                  <option value='admin' ".($row['role']=="admin"?"selected":"").">Admin</option>
-                  <option value='auditor' ".($row['role']=="auditor"?"selected":"").">Auditor</option>
-                  <option value='supervisor' ".($row['role']=="supervisor"?"selected":"").">Supervisor</option>
-                  <option value='data_analyst' ".($row['role']=="data_analyst"?"selected":"").">Data Analyst</option>
-               </select>
-               <div class='form-actions'>
-                  <button type='submit' name='update_account' class='save'>Save</button>
-                  <button type='button' class='cancel' onclick=\"toggleEdit(".$row['id'].")\">Cancel</button>
-               </div>
-            </form>
-         </td>
-      </tr>";
-
-      }
-   } else {
-      echo "<tr><td colspan='6'>No accounts found</td></tr>";
-   }
-?>
-</tbody>
-      </table>
-   </div>
-
-   <!-- Hidden Edit Form (popup style) -->
-   <div id="editFormContainer" style="display:none; margin-top:20px;">
-      <form method="POST" class="edit-form">
-         <input type="hidden" name="user_id" id="edit_user_id">
-         <label>Username:</label><br>
-         <input type="text" name="username" id="edit_username" required><br>
-         <label>Password:</label><br>
-         <input type="text" name="password" id="edit_password" required><br>
-         <label>Role:</label><br>
-         <select name="role" id="edit_role" required>
-            <option value="admin">Admin</option>
-            <option value="auditor">Auditor</option>
-            <option value="supervisor">Supervisor</option>
-            <option value="agent">Agent</option>
-            <option value="data_analyst">Data Analyst</option>
-         </select><br>
-         <button type="submit" name="update_account" class="save">Save</button>
-         <button type="button" class="cancel" onclick="hideEditForm()">Cancel</button>
-      </form>
+                  <?php endforeach; else: ?>
+                  <tr><td colspan="5" class="info">No accounts found.</td></tr>
+                  <?php endif; ?>
+               </tbody>
+            </table>
+         </div>
+      </div>
    </div>
 </main>
 
 <script>
-function showEditForm(id, username, password, role) {
-   document.getElementById("editFormContainer").style.display = "block";
-   document.getElementById("edit_user_id").value = id;
-   document.getElementById("edit_username").value = username;
-   document.getElementById("edit_password").value = password;
-   document.getElementById("edit_role").value = role;
-   window.scrollTo(0, document.body.scrollHeight);
+function toggleEdit(id){
+   var row = document.getElementById('edit-row-' + id);
+   if (!row) return;
+   row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none';
 }
-function hideEditForm() {
-   document.getElementById("editFormContainer").style.display = "none";
-}
-
-</script>
-
-<!--=============== MAIN JS ===============-->
-<script src="../../assets/js/main.js"></script>
-
-<script>
-   function toggleEdit(id) {
-      let row = document.getElementById("edit-form-" + id);
-      row.style.display = (row.style.display === "none" || row.style.display === "") ? "table-row" : "none";
-   }
 </script>
 </body>
 </html>
