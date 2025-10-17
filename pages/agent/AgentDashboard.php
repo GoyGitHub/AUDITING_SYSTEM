@@ -1,4 +1,4 @@
-<?php                  
+<?php
 include('../../database/dbconnection.php');
 
 // ✅ Load session user details safely
@@ -7,295 +7,336 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 // Pull data from session
-$username = $_SESSION['username'] ?? 'User';
+$username = $_SESSION['username'] ?? '';
 $role = ucfirst($_SESSION['user_role'] ?? 'User');
 $displayName = ucfirst($username) . '.';
 
-// Dashboard summary counts
-function getCount($conn, $table) {
-    $result = $conn->query("SELECT COUNT(*) as cnt FROM $table");
-    return $result ? $result->fetch_assoc()['cnt'] : 0;
-}
-$auditCount = getCount($conn, 'data_reports'); // total audits in databank
-$agentCount = getCount($conn, 'agents2');
-$supervisorCount = getCount($conn, 'supervisors');
+// --- Resolve current agent by session (try full name or email) ---
+$agentId = null;
+$agentFullName = $displayName;
+$agentEmail = '';
+$agentTeam = '';
 
-// Recent audits (global, completed only)
-$recentAudits = [];
-$recentSql = "SELECT * FROM data_reports WHERE status IS NULL OR status != 'Incomplete' ORDER BY created_at DESC LIMIT 5";
-$recentResult = $conn->query($recentSql);
-if ($recentResult && $recentResult->num_rows > 0) {
-    while ($row = $recentResult->fetch_assoc()) {
-        $recentAudits[] = $row;
+if (!empty($username)) {
+    $stmtA = $conn->prepare("
+        SELECT id, agent_firstname, agent_lastname, email, team
+        FROM agents2
+        WHERE CONCAT(agent_firstname, ' ', agent_lastname) = ? OR email = ?
+        LIMIT 1
+    ");
+    if ($stmtA) {
+        $stmtA->bind_param("ss", $username, $username);
+        $stmtA->execute();
+        $resA = $stmtA->get_result();
+        if ($resA && $rowA = $resA->fetch_assoc()) {
+            $agentId = (int)$rowA['id'];
+            $agentFullName = $rowA['agent_firstname'] . ' ' . $rowA['agent_lastname'];
+            $agentEmail = $rowA['email'] ?? '';
+            $agentTeam = $rowA['team'] ?? '';
+        }
+        $stmtA->close();
     }
 }
 
-// --- Random Agent Audit Feature ---
-if (isset($_GET['random_audit'])) {
-    $result = $conn->query("SELECT agent_firstname, agent_lastname FROM agents2 ORDER BY RAND() LIMIT 1");
-    if ($result && $row = $result->fetch_assoc()) {
-        $agentName = $row['agent_firstname'] . ' ' . $row['agent_lastname'];
-        header("Location: AuditorAuditForm.php?agent=" . urlencode($agentName));
-        exit();
-    } 
+// Fallback: if no agent match, try displayName (without trailing dot)
+if (!$agentId) {
+    $tryName = rtrim($displayName, '.');
+    $stmtB = $conn->prepare("
+        SELECT id, agent_firstname, agent_lastname, email, team
+        FROM agents2
+        WHERE CONCAT(agent_firstname, ' ', agent_lastname) = ? LIMIT 1
+    ");
+    if ($stmtB) {
+        $stmtB->bind_param("s", $tryName);
+        $stmtB->execute();
+        $resB = $stmtB->get_result();
+        if ($resB && $rowB = $resB->fetch_assoc()) {
+            $agentId = (int)$rowB['id'];
+            $agentFullName = $rowB['agent_firstname'] . ' ' . $rowB['agent_lastname'];
+            $agentEmail = $rowB['email'] ?? '';
+            $agentTeam = $rowB['team'] ?? '';
+        }
+        $stmtB->close();
+    }
 }
+
+// --- Fetch agent audits (latest 10) ---
+$agentAudits = [];
+if ($agentFullName) {
+    $stmt = $conn->prepare("SELECT * FROM data_reports WHERE agent_name = ? ORDER BY date DESC, time DESC LIMIT 10");
+    if ($stmt) {
+        $stmt->bind_param("s", $agentFullName);
+        $stmt->execute();
+        $res = $stmt->get_result();
+        if ($res) {
+            while ($r = $res->fetch_assoc()) $agentAudits[] = $r;
+        }
+        $stmt->close();
+    }
+}
+
+// --- Compute stats: total audits, avg score, last score, score series ---
+$totalAudits = count($agentAudits);
+$scoreSum = 0;
+$scoreCount = 0;
+$scoreSeries = []; // ['label'=>date, 'score'=>int]
+$lastScoreLabel = 'N/A';
+$lastScoreVal = null;
+
+foreach ($agentAudits as $ar) {
+    $score = 0;
+    for ($i = 1; $i <= 10; $i++) {
+        $ans = strtolower(trim($ar["q{$i}"] ?? ''));
+        if ($ans === 'yes') $score += 10;
+    }
+    $scoreSum += $score;
+    $scoreCount++;
+    $label = ($ar['date'] ? $ar['date'] : substr($ar['created_at'],0,10));
+    $scoreSeries[] = ['label' => $label, 'score' => $score];
+    if ($lastScoreVal === null) {
+        $lastScoreVal = $score;
+        $lastScoreLabel = $label;
+    }
+}
+$avgScore = $scoreCount ? round($scoreSum / $scoreCount, 1) : 0;
+
+// --- Upcoming coaching sessions for this agent ---
+$upcomingCoaching = [];
+$stmtC = $conn->prepare("SELECT id, coach, date, time, type, notes FROM coaching_sessions WHERE agent = ? AND date >= CURDATE() ORDER BY date ASC, time ASC LIMIT 10");
+if ($stmtC) {
+    $stmtC->bind_param("s", $agentFullName);
+    $stmtC->execute();
+    $rc = $stmtC->get_result();
+    if ($rc) {
+        while ($row = $rc->fetch_assoc()) $upcomingCoaching[] = $row;
+    }
+    $stmtC->close();
+}
+
+// --- Supervisor comments for this agent (latest 10) ---
+$supervisorComments = [];
+$stmtS = $conn->prepare("SELECT id, comment, status, created_at, reviewer_name FROM supervisor_comments WHERE agent_name = ? ORDER BY created_at DESC LIMIT 10");
+if ($stmtS) {
+    $stmtS->bind_param("s", $agentFullName);
+    $stmtS->execute();
+    $rs = $stmtS->get_result();
+    if ($rs) {
+        while ($row = $rs->fetch_assoc()) $supervisorComments[] = $row;
+    }
+    $stmtS->close();
+}
+
+// --- If no agent found, mark a flag for UI ---
+$agentFound = !empty($agentId) || (!empty($agentFullName) && !empty($agentEmail) || $totalAudits > 0);
+
 ?>
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-   <meta charset="UTF-8">
-   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-   <!--=============== REMIXICONS ===============-->
-   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.2.0/remixicon.css">
-
-   <!--=============== CSS ===============-->
-   <link rel="stylesheet" href="../../assets/css/styles.css">
-
-   <title>Dashboard | Cool Pals</title>
-   <style>
-      .dashboard-article {
-         padding: 2rem;
-         background-color: #fff;
-         border-radius: 1rem;
-         box-shadow: 0 4px 12px rgba(0,0,0,0.10);
-         margin-top: 2rem;
-         font-family: 'Nunito Sans', sans-serif;
-      }
-
-      .dashboard-article h2 {
-         font-size: 1.8rem;
-         color: #003366;
-         margin-bottom: 1rem;
-      }
-
-      .dashboard-article p {
-         font-size: 1rem;
-         line-height: 1.6;
-         color: #333;
-         margin-bottom: 1.5rem;
-      }
-
-      .dashboard-summary {
-         display: grid;
-         grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-         gap: 2rem;
-         margin-bottom: 2.5rem;
-      }
-      .summary-card {
-         background: #f5f8fa;
-         border-radius: 1rem;
-         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-         padding: 2rem 1.5rem;
-         text-align: center;
-      }
-      .summary-card h3 {
-         font-size: 1.1rem;
-         color: #003366;
-         margin-bottom: 0.7rem;
-      }
-      .summary-card .count {
-         font-size: 2.2rem;
-         font-weight: bold;
-         color: #0055aa;
-         margin-bottom: 0.5rem;
-      }
-      .summary-card .icon {
-         font-size: 2rem;
-         color: #003366;
-         margin-bottom: 0.5rem;
-      }
-      .dashboard-buttons {
-         display: flex;
-         flex-wrap: wrap;
-         gap: 1.7rem;
-         margin-top: 1.5rem;
-      }
-      .dashboard-buttons a {
-         padding: 1.2rem 2.5rem;
-         background-color: #003366;
-         color: #fff;
-         text-decoration: none;
-         border-radius: 0.8rem;
-         transition: 0.3s;
-         display: inline-flex;
-         align-items: center;
-         gap: 0.5rem;
-         font-size: 1rem;
-      }
-      .dashboard-buttons a:hover {
-         background-color: #0055aa;
-      }
-      .dashboard-buttons i {
-         font-size: 1.2rem;
-      }
-      .recent-audits-table {
-         width: 100%;
-         border-collapse: collapse;
-         margin-top: 2.5rem;
-         background: #fff;
-         border-radius: 1rem;
-         box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-      }
-      .recent-audits-table th, .recent-audits-table td {
-         padding: 0.8rem 1rem;
-         border-bottom: 1px solid #eee;
-         text-align: left;
-         font-size: 1rem;
-      }
-      .recent-audits-table th {
-         background: #f5f8fa;
-         color: #003366;
-         font-weight: 600;
-      }
-      .recent-audits-table tr:last-child td {
-         border-bottom: none;
-      }
-   </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Agent Dashboard</title>
+<link rel="stylesheet" href="../../assets/css/styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/remixicon/4.2.0/remixicon.css">
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+/* Minimal professional styling aligned with admin pages */
+.container { max-width:1200px; margin:90px auto 40px; padding: 1rem; margin-left:320px; }
+.profile-card { background:#fff; border-radius:12px; padding:1.2rem; display:flex; gap:1rem; align-items:center; box-shadow:0 6px 18px rgba(0,0,0,0.06); }
+.profile-card .meta { flex:1; }
+.profile-card .meta h2 { margin:0; color:#003366; }
+.stats-grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap:1rem; margin-top:1rem; }
+.stat { background:#f5f8fa; padding:1rem; border-radius:10px; text-align:center; }
+.section { margin-top:1.25rem; background:#fff; padding:1rem; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,0.04); }
+.table { width:100%; border-collapse:collapse; }
+.table th, .table td { padding:0.6rem; border-bottom:1px solid #eee; text-align:left; }
+.actions { display:flex; gap:0.5rem; justify-content:flex-end; align-items:center; }
+.small-btn { padding:8px 12px; border-radius:8px; background:#1976d2; color:#fff; border:none; cursor:pointer; text-decoration:none; }
+.small-btn.ghost { background:transparent; color:#1976d2; border:1px solid rgba(25,118,210,0.12); }
+.empty { color:#888; padding:1rem; text-align:center; }
+@media(max-width:900px){ .profile-card{flex-direction:column;align-items:flex-start} .actions{justify-content:flex-start} }
+</style>
 </head>
-<!--=============== HEADER ===============-->
+<body>
+<!-- =============== HEADER =============== -->
 <header class="header" id="header">
    <div class="header__container">
-      <button class="header__toggle" id="header-toggle">
-         <i class="ri-menu-line"></i>
-      </button>
-
-      <!-- Right-side Logo Link -->
-      <a href="https://yourlink.com" class="header__logo">
-         <img src="../../assets/img/logo.png" alt="Logo" style="height: 40px;">
-      </a>
+      <button class="header__toggle" id="header-toggle"><i class="ri-menu-line"></i></button>
+      <a href="https://yourlink.com" class="header__logo"><img src="../../assets/img/logo.png" alt="Logo" style="height:40px;"></a>
    </div>
 </header>
 
-   <!--=============== SIDEBAR ===============-->
-   <nav class="sidebar" id="sidebar">
-      <div class="sidebar__container">
-         <div class="sidebar__user">
-            <div class="sidebar__img">
-               <img src="../../assets/img/perfil.png" alt="image">
-            </div>
-                  <div class="sidebar__info">
-                        <h3><?php echo htmlspecialchars($displayName); ?></h3>
-                        <span><?php echo htmlspecialchars($role); ?></span>
-                </div>
-         </div>
-
-         <div class="sidebar__content">
-            <div>
-               <h3 class="sidebar__title">MANAGE</h3>
-               <div class="sidebar__list">
-                  <a href="AuditorDashboard.php" class="sidebar__link   active-link">
-                     <i class="ri-dashboard-horizontal-fill"></i>
-                     <span>Dashboard</span>
-                  </a>
-                  <a href="AuditorAuditForm.php" class="sidebar__link">
-                     <i class="ri-survey-fill"></i>
-                     <span>Unify Audit System (UAS)</span>
-                  </a>
-
-               </div>
-            </div>
-
-         <div>
-            <h3 class="sidebar__title"></h3>
+<!-- =============== SIDEBAR =============== -->
+<nav class="sidebar" id="sidebar">
+   <div class="sidebar__container">
+      <div class="sidebar__user">
+         <div class="sidebar__img"><img src="../../assets/img/perfil.png" alt="image"></div>
+         <div class="sidebar__info"><h3><?php echo htmlspecialchars($agentFullName); ?></h3><span><?php echo htmlspecialchars($role); ?></span></div>
+      </div>
+      <div class="sidebar__content">
+         <div><h3 class="sidebar__title">MY WORKSPACE</h3>
             <div class="sidebar__list">
-               <a href="AdminTools.php" class="sidebar__link">
-                  <i class=""></i>
-                  <span></span>
-               </a>
-               <a href="#" class="sidebar__link">
-                  <i class=""></i>
-                  <span></span>
-               </a>
-               <a href="#" class="sidebar__link">
-                  <i class=""></i>
-                  <span></span>
-               </a>
+               <a href="AgentDashboard.php" class="sidebar__link active-link"><i class="ri-dashboard-line"></i><span>Dashboard</span></a>
+               <a href="../auditor/AuditorAuditForm.php" class="sidebar__link"><i class="ri-survey-fill"></i><span>View Audits</span></a>
+               <a href="AgentProfile.php" class="sidebar__link"><i class="ri-user-3-fill"></i><span>Profile</span></a>
+               <a href="../supervisor/SupervisorConductCoach.php" class="sidebar__link"><i class="ri-ubuntu-fill"></i><span>Coaching</span></a>
             </div>
-         </div>
-         </div>
-
-         <div class="sidebar__actions">
-            <button>
-               <i class="ri-moon-clear-fill sidebar__link sidebar__theme" id="theme-button">
-                  <span>Theme</span>
-               </i>
-            </button>
-            <a href="../../LoginFunction.php" class="sidebar__link">
-               <i class="ri-logout-box-r-fill"></i>
-               <span>Log Out</span>
-            </a>
          </div>
       </div>
-   </nav>
+      <div class="sidebar__actions">
+         <button><i class="ri-moon-clear-fill sidebar__link sidebar__theme" id="theme-button"><span>Theme</span></i></button>
+         <a href="../../LoginFunction.php" class="sidebar__link"><i class="ri-logout-box-r-fill"></i><span>Log Out</span></a>
+      </div>
+   </div>
+</nav>
 
-   <!--=============== MAIN ===============-->
-   <main class="main container" id="main">
-      <section class="dashboard-article">
-         <h2>Auditor Dashboard</h2>
-         <p>
-            Welcome! Here you can review global audit activity, see key metrics, and quickly access common auditor tools.
-         </p>
-         <!-- Dashboard Summary Section -->
-         <div class="dashboard-summary">
-            <div class="summary-card">
-                <div class="icon"><i class="ri-survey-fill"></i></div>
-                <div class="count"><?php echo $auditCount; ?></div>
-                <h3>Audits Performed</h3>
-            </div>
-            <div class="summary-card">
-                <div class="icon"><i class="ri-user-2-fill"></i></div>
-                <div class="count"><?php echo $agentCount; ?></div>
-                <h3>Agents</h3>
-            </div>
-            <div class="summary-card">
-                <div class="icon"><i class="ri-user-star-fill"></i></div>
-                <div class="count"><?php echo $supervisorCount; ?></div>
-                <h3>Supervisors</h3>
-            </div>
+<!-- =============== MAIN =============== -->
+<main class="container">
+   <!-- Profile Card -->
+   <div class="profile-card">
+      <div style="width:72px;height:72px;background:#eaf1fb;border-radius:12px;display:flex;align-items:center;justify-content:center;">
+         <i class="ri-user-3-fill" style="font-size:28px;color:#003366;"></i>
+      </div>
+      <div class="meta">
+         <h2><?php echo htmlspecialchars($agentFullName); ?></h2>
+         <div style="color:#666;margin-top:6px;">
+            Team: <?php echo htmlspecialchars($agentTeam ?: 'N/A'); ?> &nbsp; • &nbsp;
+            Email: <?php echo htmlspecialchars($agentEmail ?: 'N/A'); ?>
          </div>
+      </div>
+      <div class="actions">
+         <a class="small-btn ghost" href="AgentProfile.php">Edit Profile</a>
+         <a class="small-btn" href="AgentMyAudits.php">My Audits</a>
+      </div>
+   </div>
 
-         <!-- Quick Actions -->
-         <div class="dashboard-buttons">
-            <a href="AuditorAuditForm.php"><i class="ri-survey-fill"></i> Start New Audit</a>
-            <a href="RandomAuditSelection.php"><i class="ri-shuffle-fill"></i> Audit a Random Agent</a>
-         </div>
+   <!-- Stats Grid -->
+   <div class="stats-grid">
+      <div class="stat">
+         <div style="font-size:1.1rem;color:#666;">Total Audits</div>
+         <div style="font-size:1.6rem;font-weight:700;color:#003366;"><?php echo $totalAudits; ?></div>
+      </div>
+      <div class="stat">
+         <div style="font-size:1.1rem;color:#666;">Average Score</div>
+         <div style="font-size:1.6rem;font-weight:700;color:#003366;"><?php echo $avgScore; ?> / 100</div>
+      </div>
+      <div class="stat">
+         <div style="font-size:1.1rem;color:#666;">Last Audit Score</div>
+         <div style="font-size:1.6rem;font-weight:700;color:#003366;"><?php echo ($lastScoreVal !== null) ? ($lastScoreVal . ' / 100') : 'N/A'; ?></div>
+      </div>
+      <div class="stat">
+         <div style="font-size:1.1rem;color:#666;">Upcoming Coaching</div>
+         <div style="font-size:1.6rem;font-weight:700;color:#003366;"><?php echo count($upcomingCoaching); ?></div>
+      </div>
+   </div>
 
-         <!-- Recent Audits Table (global, completed only) -->
-         <h2 style="margin-top:2.5rem;">Recent Audits</h2>
-         <table class="recent-audits-table">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Reviewer</th>
-                    <th>Agent</th>
-                    <th>Status</th>
-                    <th>Comment</th>
-                </tr>
-            </thead>
+   <!-- Score Trend Section -->
+   <div class="section">
+      <h3>Score Trend</h3>
+      <div style="height:300px;"><canvas id="scoreTrend"></canvas></div>
+   </div>
+
+   <!-- Recent Audits Section -->
+   <div class="section" style="margin-top:1rem;">
+      <h3>Recent Audits</h3>
+      <?php if ($totalAudits > 0): ?>
+      <table class="table">
+         <thead><tr><th>Date</th><th>Reviewer</th><th>Status</th><th>Score</th><th>Comment</th></tr></thead>
+         <tbody>
+            <?php foreach ($agentAudits as $a):
+               $score = 0;
+               for ($i=1;$i<=10;$i++) if (strtolower(trim($a["q{$i}"] ?? '')) === 'yes') $score+=10;
+               $status = $a['status'] ?? 'N/A';
+            ?>
+            <tr>
+               <td><?php echo htmlspecialchars($a['date'] ?: substr($a['created_at'],0,10)); ?></td>
+               <td><?php echo htmlspecialchars($a['reviewer_name']); ?></td>
+               <td><?php echo htmlspecialchars($status); ?></td>
+               <td><?php echo $score; ?> / 100</td>
+               <td><?php echo htmlspecialchars($a['comment']); ?></td>
+            </tr>
+            <?php endforeach; ?>
+         </tbody>
+      </table>
+      <?php else: ?>
+         <div class="empty">No audits found for <?php echo htmlspecialchars($agentFullName); ?>.</div>
+      <?php endif; ?>
+   </div>
+
+   <!-- Coaching and Comments Section -->
+   <div class="section" style="margin-top:1rem; display:flex; gap:1rem; flex-wrap:wrap;">
+      <!-- Upcoming Coaching Sessions -->
+      <div style="flex:1; min-width:320px;">
+         <h3>Upcoming Coaching Sessions</h3>
+         <?php if (count($upcomingCoaching)): ?>
+         <table class="table">
+            <thead><tr><th>Date</th><th>Time</th><th>Coach</th><th>Type</th><th></th></tr></thead>
             <tbody>
-                <?php if (count($recentAudits)): ?>
-                    <?php foreach ($recentAudits as $audit): ?>
-                        <tr>
-                            <td><?php echo htmlspecialchars($audit['date']); ?></td>
-                            <td><?php echo htmlspecialchars($audit['reviewer_name']); ?></td>
-                            <td><?php echo htmlspecialchars($audit['agent_name']); ?></td>
-                            <td><?php echo htmlspecialchars($audit['status']); ?></td>
-                            <td><?php echo htmlspecialchars($audit['comment']); ?></td>
-                        </tr>
-                    <?php endforeach; ?>
-                <?php else: ?>
-                    <tr>
-                        <td colspan="5" style="text-align:center;">No recent audits found.</td>
-                    </tr>
-                <?php endif; ?>
+               <?php foreach ($upcomingCoaching as $c): ?>
+               <tr>
+                  <td><?php echo htmlspecialchars($c['date']); ?></td>
+                  <td><?php echo htmlspecialchars($c['time']); ?></td>
+                  <td><?php echo htmlspecialchars($c['coach']); ?></td>
+                  <td><?php echo htmlspecialchars($c['type']); ?></td>
+                  <td style="text-align:right;"><a class="small-btn ghost" href="SupervisorConductCoach.php?agent=<?php echo urlencode($agentFullName); ?>">Details</a></td>
+               </tr>
+               <?php endforeach; ?>
             </tbody>
          </table>
-      </section>
-   </main>
-   <!--=============== MAIN JS ===============-->
-   <script src="../../assets/js/main.js"></script>
+         <?php else: ?>
+            <div class="empty">No upcoming coaching sessions.</div>
+         <?php endif; ?>
+      </div>
+
+      <!-- Supervisor Comments -->
+      <div style="flex:1; min-width:320px;">
+         <h3>Supervisor Comments</h3>
+         <?php if (count($supervisorComments)): ?>
+            <ul style="list-style:none;padding:0;margin:0;">
+               <?php foreach ($supervisorComments as $sc): ?>
+                  <li style="border-bottom:1px solid #eee;padding:0.6rem 0;">
+                     <div style="font-weight:700;"><?php echo htmlspecialchars($sc['reviewer_name'] ?: 'Supervisor'); ?> <span style="color:#888;font-weight:600;font-size:0.9rem;">• <?php echo htmlspecialchars(substr($sc['created_at'],0,10)); ?></span></div>
+                     <div style="margin-top:6px;"><?php echo nl2br(htmlspecialchars($sc['comment'])); ?></div>
+                     <div style="margin-top:6px;font-size:0.9rem;color:#666;">Status: <?php echo htmlspecialchars($sc['status'] ?: 'pending'); ?></div>
+                  </li>
+               <?php endforeach; ?>
+            </ul>
+         <?php else: ?>
+            <div class="empty">No supervisor comments.</div>
+         <?php endif; ?>
+      </div>
+   </div>
+</main>
+
+<!-- Score Trend Chart Script -->
+<script>
+// Score trend chart
+const labels = <?php echo json_encode(array_column($scoreSeries,'label')); ?>;
+const dataPoints = <?php echo json_encode(array_column($scoreSeries,'score')); ?>;
+const ctx = document.getElementById('scoreTrend').getContext('2d');
+new Chart(ctx, {
+    type: 'line',
+    data: {
+        labels: labels,
+        datasets: [{
+            label: 'Score',
+            data: dataPoints,
+            borderColor: '#1976d2',
+            backgroundColor: 'rgba(25,118,210,0.08)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: { y: { beginAtZero:true, max:100 } },
+        maintainAspectRatio: false
+    }
+});
+</script>
+
 </body>
 </html>

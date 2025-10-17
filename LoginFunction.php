@@ -7,7 +7,8 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim($_POST['username']);
     $password = trim($_POST['password']);
-    $selected_role = trim($_POST['role']); // selected role from dropdown
+    // Normalize selected role early for consistent compare
+    $selected_role = isset($_POST['role']) ? strtolower(trim($_POST['role'])) : '';
 
     if (empty($username) || empty($password) || empty($selected_role)) {
         $error = "All fields are required.";
@@ -24,12 +25,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Verify password (plain or hashed)
                 $validPassword = ($password === $user['password'] || password_verify($password, $user['password']));
-                $validRole = strtolower($selected_role) === strtolower($user['role']);
+                $dbRole = strtolower(trim($user['role'] ?? ''));
+
+                // Accept exact role match
+                $validRole = ($selected_role === $dbRole);
 
                 if ($validPassword && $validRole) {
                     // ✅ Set session variables consistently
                     $_SESSION['username'] = $user['username'];
-                    $_SESSION['user_role'] = strtolower($user['role']);
+                    $_SESSION['user_role'] = $dbRole;
 
                     // ✅ Redirect user to proper dashboard
                     switch ($_SESSION['user_role']) {
@@ -45,12 +49,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         case 'data_analyst':
                             header("Location: pages/data_analyst/DataAnalystDashboard.php");
                             exit;
+                        case 'agent':
+                            header("Location: pages/agent/AgentDashboard.php");
+                            exit;
                         default:
                             $error = "Unknown role detected.";
                             break;
                     }
                 } else {
-                    $error = "Invalid password or role.";
+                    // clearer error to help debug role vs password mismatches
+                    if (!$validPassword) {
+                        $error = "Invalid password.";
+                    } else {
+                        $error = "Invalid role selection. (selected: {$selected_role}, account role: {$dbRole})";
+                    }
                 }
             } else {
                 $error = "User not found.";
@@ -125,6 +137,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <option value="auditor">🔍 Auditor</option>
                         <option value="supervisor">👔 Supervisor</option>
                         <option value="data_analyst">📊 Data Analyst</option>
+                        <option value="agent">👤 Agent</option>
                     </select>
                 </div>
 
