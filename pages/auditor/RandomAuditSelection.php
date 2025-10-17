@@ -32,12 +32,39 @@ if ($recentResult && $recentResult->num_rows > 0) {
 
 // --- Random Agent Audit Feature ---
 if (isset($_GET['random_audit'])) {
-    $result = $conn->query("SELECT agent_firstname, agent_lastname FROM agents ORDER BY RAND() LIMIT 1");
-    if ($result && $row = $result->fetch_assoc()) {
-        $agentName = $row['agent_firstname'] . ' ' . $row['agent_lastname'];
-        header("Location: AuditorAuditForm.php?agent=" . urlencode($agentName));
+    // Try to pick a random pending ticket from audit_tickets
+    $ticketRes = $conn->query("SELECT id FROM audit_tickets WHERE status = 'pending' ORDER BY RAND() LIMIT 1");
+    if ($ticketRes && $ticketRow = $ticketRes->fetch_assoc()) {
+        // Found an existing pending ticket — open that ticket
+        $ticketId = intval($ticketRow['id']);
+        header("Location: AuditorAuditForm.php?ticket_id=" . $ticketId);
         exit();
-    } 
+    } else {
+        // No pending tickets — create one for a random agent (use agents2)
+        $agentR = $conn->query("SELECT id FROM agents2 ORDER BY RAND() LIMIT 1");
+        if ($agentR && $agentRow = $agentR->fetch_assoc()) {
+            $agentId = intval($agentRow['id']);
+            $stmt = $conn->prepare("INSERT INTO audit_tickets (auditor, agent_id, status, created_at) VALUES (?, ?, 'pending', NOW())");
+            if ($stmt) {
+                $auditorName = $username ?? ($_SESSION['username'] ?? ''); // use session username if available
+                $stmt->bind_param("si", $auditorName, $agentId);
+                $stmt->execute();
+                $newId = $stmt->insert_id;
+                $stmt->close();
+                if ($newId) {
+                    header("Location: AuditorAuditForm.php?ticket_id=" . intval($newId));
+                    exit();
+                }
+            }
+        }
+        // Fallback: if everything fails, redirect to form with a random agent name (legacy fallback)
+        $fallback = $conn->query("SELECT agent_firstname, agent_lastname FROM agents2 ORDER BY RAND() LIMIT 1");
+        if ($fallback && $fb = $fallback->fetch_assoc()) {
+            $agentName = $fb['agent_firstname'] . ' ' . $fb['agent_lastname'];
+            header("Location: AuditorAuditForm.php?agent=" . urlencode($agentName));
+            exit();
+        }
+    }
 }
 
 // --- Generate Random Audit Ticket ---

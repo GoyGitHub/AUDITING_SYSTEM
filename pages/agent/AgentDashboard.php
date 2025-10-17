@@ -187,9 +187,6 @@ $agentFound = !empty($agentId) || (!empty($agentFullName) && !empty($agentEmail)
          <div><h3 class="sidebar__title">MY WORKSPACE</h3>
             <div class="sidebar__list">
                <a href="AgentDashboard.php" class="sidebar__link active-link"><i class="ri-dashboard-line"></i><span>Dashboard</span></a>
-               <a href="../auditor/AuditorAuditForm.php" class="sidebar__link"><i class="ri-survey-fill"></i><span>View Audits</span></a>
-               <a href="AgentProfile.php" class="sidebar__link"><i class="ri-user-3-fill"></i><span>Profile</span></a>
-               <a href="../supervisor/SupervisorConductCoach.php" class="sidebar__link"><i class="ri-ubuntu-fill"></i><span>Coaching</span></a>
             </div>
          </div>
       </div>

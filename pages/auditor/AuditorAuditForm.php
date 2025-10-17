@@ -24,42 +24,74 @@ $agents_result = mysqli_query($conn, $agents_query);
 
 // --- Show audit ticket if present ---
 $ticketAgentName = '';
+$ticketIdFromGet = null;
 if (isset($_GET['ticket_id'])) {
-    // Fetch ticket info
-    $ticketId = intval($_GET['ticket_id']);
-    $ticketSql = "SELECT agent_id FROM audit_tickets WHERE id = $ticketId LIMIT 1";
-    $ticketRes = $conn->query($ticketSql);
-    if ($ticketRes && $ticketRow = $ticketRes->fetch_assoc()) {
-        $agentId = $ticketRow['agent_id'];
-        // Get agent name from agents2
-        $agentRes = $conn->query("SELECT agent_firstname, agent_lastname FROM agents2 WHERE id = $agentId LIMIT 1");
-        if ($agentRes && $agentRow = $agentRes->fetch_assoc()) {
-            $ticketAgentName = $agentRow['agent_firstname'] . ' ' . $agentRow['agent_lastname'];
+    $ticketIdFromGet = intval($_GET['ticket_id']);
+    $ticketSql = "SELECT t.id as ticket_id, t.agent_id, a.agent_firstname, a.agent_lastname
+                  FROM audit_tickets t
+                  LEFT JOIN agents2 a ON t.agent_id = a.id
+                  WHERE t.id = ? LIMIT 1";
+    if ($stmtT = $conn->prepare($ticketSql)) {
+        $stmtT->bind_param("i", $ticketIdFromGet);
+        $stmtT->execute();
+        $tr = $stmtT->get_result();
+        if ($tr && $trow = $tr->fetch_assoc()) {
+            $ticketAgentName = trim(($trow['agent_firstname'] ?? '') . ' ' . ($trow['agent_lastname'] ?? ''));
+        }
+        $stmtT->close();
+    }
+}
+
+// --- Determine auto-picked agent: prefer first pending ticket, else random agent ---
+$autoAgentName = '';
+$ticketList = []; // array of pending tickets with agent names
+$ticketQuery = "
+    SELECT t.id AS ticket_id, t.agent_id, a.agent_firstname, a.agent_lastname, t.status, t.created_at
+    FROM audit_tickets t
+    LEFT JOIN agents2 a ON t.agent_id = a.id
+    WHERE t.status = 'pending'
+    ORDER BY t.created_at ASC
+    LIMIT 10
+";
+if ($tres = $conn->query($ticketQuery)) {
+    while ($tr = $tres->fetch_assoc()) {
+        $agentFull = trim(($tr['agent_firstname'] ?? '') . ' ' . ($tr['agent_lastname'] ?? ''));
+        $ticketList[] = [
+            'ticket_id' => $tr['ticket_id'],
+            'agent_name' => $agentFull,
+            'status' => $tr['status'],
+            'created_at' => $tr['created_at']
+        ];
+    }
+}
+if (!$ticketAgentName) {
+    if (!empty($ticketList)) {
+        // pick first pending ticket as auto
+        $autoAgentName = $ticketList[0]['agent_name'];
+        $autoTicketId = $ticketList[0]['ticket_id'];
+    } else {
+        // fallback to random agent
+        $autoAgentRes = $conn->query("SELECT agent_firstname, agent_lastname FROM agents2 ORDER BY RAND() LIMIT 1");
+        if ($autoAgentRes && $autoAgentRow = $autoAgentRes->fetch_assoc()) {
+            $autoAgentName = $autoAgentRow['agent_firstname'] . ' ' . $autoAgentRow['agent_lastname'];
         }
     }
 }
 
-// --- Automatically pick a random agent when opening the form ---
-$autoAgentName = '';
-if (!isset($_GET['ticket_id'])) {
-    $autoAgentRes = $conn->query("SELECT agent_firstname, agent_lastname FROM agents2 ORDER BY RAND() LIMIT 1");
-    if ($autoAgentRes && $autoAgentRow = $autoAgentRes->fetch_assoc()) {
-        $autoAgentName = $autoAgentRow['agent_firstname'] . ' ' . $autoAgentRow['agent_lastname'];
-    }
-}
-
-// --- Slideshow for random agents (show as Agent 1, Agent 2, ...) ---
+// --- Slideshow: if no tickets, fallback to random agents (existing behavior) ---
 $randomAgents = [];
 $realAgentNames = [];
-$agents_query_slide = "SELECT agent_firstname, agent_lastname FROM agents2 ORDER BY RAND() LIMIT 5";
-$agents_result_slide = $conn->query($agents_query_slide);
-if ($agents_result_slide && $agents_result_slide->num_rows > 0) {
-    $idx = 1;
-    while ($row = $agents_result_slide->fetch_assoc()) {
-        $realName = $row['agent_firstname'] . ' ' . $row['agent_lastname'];
-        $randomAgents[] = "Agent " . $idx;
-        $realAgentNames[] = $realName;
-        $idx++;
+if (empty($ticketList)) {
+    $agents_query_slide = "SELECT agent_firstname, agent_lastname FROM agents2 ORDER BY RAND() LIMIT 5";
+    $agents_result_slide = $conn->query($agents_query_slide);
+    if ($agents_result_slide && $agents_result_slide->num_rows > 0) {
+        $idx = 1;
+        while ($row = $agents_result_slide->fetch_assoc()) {
+            $realName = $row['agent_firstname'] . ' ' . $row['agent_lastname'];
+            $randomAgents[] = "Agent " . $idx;
+            $realAgentNames[] = $realName;
+            $idx++;
+        }
     }
 }
 ?>
@@ -468,81 +500,144 @@ if ($agents_result_slide && $agents_result_slide->num_rows > 0) {
     <main class="main container" id="main">
         <h1>Agent Audit Sheet</h1>
         <!-- Slideshow for random agents -->
-        <div class="agent-slideshow-container">
-            <div id="agentSlides">
-                <?php foreach ($randomAgents as $i => $agentLabel): ?>
-                    <div class="agent-slide<?php echo $i === 0 ? ' active' : ''; ?>" 
-                         data-agent-label="<?php echo htmlspecialchars($agentLabel); ?>"
-                         data-agent-real="<?php echo htmlspecialchars($realAgentNames[$i]); ?>">
-                        <?php echo htmlspecialchars($agentLabel); ?>
-                    </div>
-                <?php endforeach; ?>
+        <?php if (!empty($ticketList)): ?>
+            <div class="agent-slideshow-container">
+                <div id="agentSlides">
+                    <?php foreach ($ticketList as $i => $t): ?>
+                        <div class="agent-slide<?php echo $i === 0 ? ' active' : ''; ?>"
+                             data-ticket-id="<?php echo (int)$t['ticket_id']; ?>"
+                             data-agent-real="<?php echo htmlspecialchars($t['agent_name']); ?>">
+                            <?php echo "Ticket #" . (int)$t['ticket_id'] . " — " . htmlspecialchars($t['agent_name']); ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <div class="agent-slideshow-controls">
+                    <button class="agent-slideshow-btn" onclick="prevAgentSlide()"><i class="ri-arrow-left-s-line"></i></button>
+                    <button class="agent-slideshow-btn" onclick="nextAgentSlide()"><i class="ri-arrow-right-s-line"></i></button>
+                </div>
+                <button class="agent-pick-btn" onclick="pickTicketSlide()">Pick This Ticket</button>
+                <div id="agentReveal" style="margin-top:1rem; font-size:1.1rem; color:#0055aa; font-weight:600; display:none;"></div>
             </div>
-            <div class="agent-slideshow-controls">
-                <button class="agent-slideshow-btn" onclick="prevAgentSlide()">
-                    <i class="ri-arrow-left-s-line"></i>
-                </button>
-                <button class="agent-slideshow-btn" onclick="nextAgentSlide()">
-                    <i class="ri-arrow-right-s-line"></i>
-                </button>
+        <?php elseif (!empty($randomAgents)): ?>
+            <!-- existing random agent slideshow fallback -->
+            <div class="agent-slideshow-container">
+                <div id="agentSlides">
+                    <?php foreach ($randomAgents as $i => $agentLabel): ?>
+                        <div class="agent-slide<?php echo $i === 0 ? ' active' : ''; ?>"
+                             data-agent-real="<?php echo htmlspecialchars($realAgentNames[$i]); ?>">
+                            <?php echo htmlspecialchars($agentLabel); ?>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+                <div class="agent-slideshow-controls">
+                    <button class="agent-slideshow-btn" onclick="prevAgentSlide()"><i class="ri-arrow-left-s-line"></i></button>
+                    <button class="agent-slideshow-btn" onclick="nextAgentSlide()"><i class="ri-arrow-right-s-line"></i></button>
+                </div>
+                <button class="agent-pick-btn" onclick="pickAgentSlide()">Pick This Agent</button>
+                <div id="agentReveal" style="margin-top:1rem; font-size:1.1rem; color:#0055aa; font-weight:600; display:none;"></div>
             </div>
-            <button class="agent-pick-btn" onclick="pickAgentSlide()">Pick This Agent</button>
-            <div id="agentReveal" style="margin-top:1rem; font-size:1.1rem; color:#0055aa; font-weight:600; display:none;">
-                <!-- Revealed agent name will appear here -->
-            </div>
-        </div>
+        <?php endif; ?>
         <script>
+            // Replace slideshow JS functions: showAgentSlide/prev/next shared for both tickets and random fallback
             let agentSlideIndex = 0;
-            const agentSlides = document.querySelectorAll('.agent-slide');
+            const agentSlides = document.querySelectorAll ? document.querySelectorAll('.agent-slide') : [];
             function showAgentSlide(idx) {
-                agentSlides.forEach((slide, i) => {
+                const slides = document.querySelectorAll('.agent-slide');
+                slides.forEach((slide, i) => {
                     slide.classList.toggle('active', i === idx);
                 });
                 agentSlideIndex = idx;
                 document.getElementById('agentReveal').style.display = 'none';
             }
             function prevAgentSlide() {
+                let slides = document.querySelectorAll('.agent-slide');
+                if (!slides.length) return;
                 let idx = agentSlideIndex - 1;
-                if (idx < 0) idx = agentSlides.length - 1;
+                if (idx < 0) idx = slides.length - 1;
                 showAgentSlide(idx);
             }
             function nextAgentSlide() {
+                let slides = document.querySelectorAll('.agent-slide');
+                if (!slides.length) return;
                 let idx = agentSlideIndex + 1;
-                if (idx >= agentSlides.length) idx = 0;
+                if (idx >= slides.length) idx = 0;
                 showAgentSlide(idx);
             }
-            function pickAgentSlide() {
-                const slide = agentSlides[agentSlideIndex];
-                const agentLabel = slide.getAttribute('data-agent-label');
+
+            // When picking a ticket slide, set hidden ticket_id and set agent select
+            function pickTicketSlide() {
+                const slides = document.querySelectorAll('.agent-slide');
+                if (!slides.length) return;
+                const slide = slides[agentSlideIndex];
+                const ticketId = slide.getAttribute('data-ticket-id');
                 const agentReal = slide.getAttribute('data-agent-real');
-                // Reveal real agent name
+
+                // reveal selection
                 const revealDiv = document.getElementById('agentReveal');
-                revealDiv.textContent = "Selected: " + agentReal;
+                revealDiv.textContent = "Selected: " + (agentReal || ("Ticket #" + ticketId));
                 revealDiv.style.display = 'block';
-                // Set agent dropdown to picked agent
+
+                // set hidden ticket_id
+                const ticketInput = document.getElementById('ticket_id');
+                if (ticketInput) ticketInput.value = ticketId;
+
+                // set agent select to chosen agent name (if present in options)
                 const agentSelect = document.querySelector('select[name="agent_name"]');
-                if (agentSelect) {
+                if (agentSelect && agentReal) {
                     for (let i = 0; i < agentSelect.options.length; i++) {
                         if (agentSelect.options[i].value === agentReal) {
                             agentSelect.selectedIndex = i;
-                            break;
+                            return;
                         }
                     }
+                    // if not found, add as option and select it
+                    const opt = document.createElement('option');
+                    opt.value = agentReal;
+                    opt.textContent = agentReal;
+                    opt.selected = true;
+                    agentSelect.appendChild(opt);
                 }
             }
-            // Automatically pick a random agent on page load
-            document.addEventListener('DOMContentLoaded', function() {
-                <?php if ($autoAgentName): ?>
+
+            // fallback pick for random agents (keeps previous behavior)
+            function pickAgentSlide() {
+                const slides = document.querySelectorAll('.agent-slide');
+                if (!slides.length) return;
+                const slide = slides[agentSlideIndex];
+                const agentReal = slide.getAttribute('data-agent-real');
+                const revealDiv = document.getElementById('agentReveal');
+                revealDiv.textContent = "Selected: " + agentReal;
+                revealDiv.style.display = 'block';
                 const agentSelect = document.querySelector('select[name="agent_name"]');
-                if (agentSelect) {
+                if (agentSelect && agentReal) {
                     for (let i = 0; i < agentSelect.options.length; i++) {
-                        if (agentSelect.options[i].value === "<?php echo addslashes($autoAgentName); ?>") {
+                        if (agentSelect.options[i].value === agentReal) {
                             agentSelect.selectedIndex = i;
-                            break;
+                            return;
+                        }
+                    }
+                    const opt = document.createElement('option');
+                    opt.value = agentReal;
+                    opt.textContent = agentReal;
+                    opt.selected = true;
+                    agentSelect.appendChild(opt);
+                }
+            }
+
+            // Auto-set agent select from PHP-provided autoAgentName or ticketAgentName on load
+            document.addEventListener('DOMContentLoaded', function() {
+                const autoAgent = "<?php echo addslashes($ticketAgentName ?: ($autoAgentName ?? '')); ?>";
+                if (autoAgent) {
+                    const agentSelect = document.querySelector('select[name="agent_name"]');
+                    if (agentSelect) {
+                        for (let i = 0; i < agentSelect.options.length; i++) {
+                            if (agentSelect.options[i].value === autoAgent) {
+                                agentSelect.selectedIndex = i;
+                                break;
+                            }
                         }
                     }
                 }
-                <?php endif; ?>
             });
         </script>
         <?php if ($ticketAgentName): ?>
@@ -685,6 +780,8 @@ if ($agents_result_slide && $agents_result_slide->num_rows > 0) {
                     </div>
                 </div>
 
+                <input type="hidden" name="ticket_id" id="ticket_id" value="<?php echo htmlspecialchars($ticketIdFromGet ?? ($autoTicketId ?? '')); ?>">
+
                 <button type="submit" name="submit" class="submit-btn">Submit Audit</button>
             </form>
         </div>
@@ -764,6 +861,21 @@ if ($agents_result_slide && $agents_result_slide->num_rows > 0) {
                 </script>";
             }
             $stmt->close();
+        }
+
+        // After successful insert of data_reports, if a ticket_id was submitted, update the ticket status
+        // Find the block where you handle POST submit and insert data_reports — modify just after successful execute:
+        if (isset($_POST['ticket_id']) && !empty($_POST['ticket_id'])) {
+            $submittedTicketId = intval($_POST['ticket_id']);
+            // attempt to set ticket as completed and record auditor/reviewer
+            $auditorName = $reviewer ?? ($username ?? '');
+            if ($updateStmt = $conn->prepare("UPDATE audit_tickets SET status = 'completed', auditor = ?, completed_at = NOW() WHERE id = ?")) {
+                $updateStmt->bind_param("si", $auditorName, $submittedTicketId);
+                $updateStmt->execute();
+                $updateStmt->close();
+            } else {
+                // silent fail; ticket table may not exist or schema differs
+            }
         }
         ?>
     </main>
