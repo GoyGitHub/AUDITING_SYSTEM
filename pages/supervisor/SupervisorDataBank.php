@@ -1,34 +1,79 @@
 <?php 
 include('../../database/dbconnection.php'); 
 
-// ✅ Start session safely
+// ✅ Load session user details safely
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// ✅ Pull data from session
+// Pull data from session
 $username = $_SESSION['username'] ?? 'User';
-$rawRole = $_SESSION['user_role'] ?? 'User';
+$role = ucfirst($_SESSION['user_role'] ?? 'User');
+$displayName = ucfirst($username) . '.';
 
-// ✅ Map and format roles
-$roleMap = [
-    'data_analyst'        => 'Data Analyst',
+// --- Search handling: agent/reviewer/date/status ---
+$search_agent = trim($_GET['agent'] ?? '');
+$search_reviewer = trim($_GET['reviewer'] ?? '');
+$search_from = trim($_GET['from'] ?? '');
+$search_to = trim($_GET['to'] ?? '');
+$search_status = trim($_GET['status'] ?? '');
 
-];
+// Build dynamic WHERE with prepared statement support
+$where = [];
+$params = [];
+$types = '';
 
-
-// ✅ Use mapped role if it exists; otherwise, format automatically
-if (isset($roleMap[strtolower($rawRole)])) {
-    $role = $roleMap[strtolower($rawRole)];
-} else {
-    // Auto-format: convert underscores to spaces and capitalize words
-    $role = ucwords(str_replace('_', ' ', strtolower($rawRole)));
+if ($search_agent !== '') {
+    $where[] = "agent_name LIKE ?";
+    $types .= 's';
+    $params[] = '%' . $search_agent . '%';
+}
+if ($search_reviewer !== '') {
+    $where[] = "reviewer_name LIKE ?";
+    $types .= 's';
+    $params[] = '%' . $search_reviewer . '%';
+}
+if ($search_from !== '') {
+    $where[] = "date >= ?";
+    $types .= 's';
+    $params[] = $search_from;
+}
+if ($search_to !== '') {
+    $where[] = "date <= ?";
+    $types .= 's';
+    $params[] = $search_to;
+}
+if ($search_status !== '') {
+    $where[] = "status = ?";
+    $types .= 's';
+    $params[] = $search_status;
 }
 
-// ✅ Display name
-$displayName = ucfirst($username) . '.';
-?>
+$query = "SELECT *, ((q1='Yes') + (q2='Yes') + (q3='Yes') + (q4='Yes') + (q5='Yes') + (q6='Yes') + (q7='Yes') + (q8='Yes') + (q9='Yes') + (q10='Yes')) * 10 AS score
+          FROM data_reports";
+if (count($where)) {
+    $query .= " WHERE " . implode(" AND ", $where);
+}
+$query .= " ORDER BY id DESC LIMIT 500"; // safety limit
 
+$stmt = $conn->prepare($query);
+if ($stmt && count($params)) {
+    // bind params dynamically
+    $bind_names = [];
+    $bind_names[] = &$types;
+    for ($i = 0; $i < count($params); $i++) {
+        $bind_names[] = &$params[$i];
+    }
+    call_user_func_array([$stmt, 'bind_param'], $bind_names);
+}
+if ($stmt) {
+    $stmt->execute();
+    $result = $stmt->get_result();
+} else {
+    // fallback
+    $result = $conn->query("SELECT *, ((q1='Yes')+(q2='Yes')+(q3='Yes')+(q4='Yes')+(q5='Yes')+(q6='Yes')+(q7='Yes')+(q8='Yes')+(q9='Yes')+(q10='Yes'))*10 AS score FROM data_reports ORDER BY id DESC LIMIT 500");
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -356,59 +401,59 @@ $displayName = ucfirst($username) . '.';
 </nav>
 <!--=============== MAIN CONTENT ===============-->
 <main class="main container" id="main">
-   <h1 style="margin-bottom: 20px; font-family:'Nunito Sans', sans-serif; color:#0d1b3d;">Audit Reports</h1>
+   <h1 style="margin-bottom: 20px;">Audit Reports</h1>
+
+   <!-- Search form -->
+   <form method="get" style="max-width:1100px;margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;">
+       <input type="text" name="agent" placeholder="Agent name" value="<?php echo htmlspecialchars($search_agent); ?>" style="flex:1;min-width:200px;padding:8px;border-radius:6px;border:1px solid #ddd;">
+       <input type="text" name="reviewer" placeholder="Reviewer name" value="<?php echo htmlspecialchars($search_reviewer); ?>" style="flex:1;min-width:200px;padding:8px;border-radius:6px;border:1px solid #ddd;">
+       <input type="date" name="from" value="<?php echo htmlspecialchars($search_from); ?>" style="padding:8px;border-radius:6px;border:1px solid #ddd;">
+       <input type="date" name="to" value="<?php echo htmlspecialchars($search_to); ?>" style="padding:8px;border-radius:6px;border:1px solid #ddd;">
+       <button type="submit" style="background:#1976d2;color:#fff;border:none;padding:8px 12px;border-radius:6px;">Search</button>
+       <a href="SupervisorDatabank.php" style="display:inline-flex;align-items:center;padding:8px 12px;border-radius:6px;background:#6c757d;color:#fff;text-decoration:none;">Clear</a>
+   </form>
+
+   <!-- Reports table (existing rendering) -->
    <div>
-<?php
-$sql = "SELECT * FROM data_reports ORDER BY id DESC";
-$result = $conn->query($sql);
+      <!-- ...existing table rendering but use $result from above instead of fresh query... -->
+      <?php
+      // ...existing table markup ...
+      // Replace data source loop to use $result:
+      if ($result && $result->num_rows > 0) {
+          while ($row = $result->fetch_assoc()) {
+              // Determine status
+              $completed = true;
+              $noCount = 0;
+              for ($i = 1; $i <= 10; $i++) {
+                 $ans = $row["q$i"];
+                 if ($ans === null || $ans === '') $completed = false;
+                 if (strtolower($ans) === "no") $noCount++;
+              }
+              $status = $completed ? "Completed" : "Incomplete";
+              $statusClass = $completed ? "completed" : "incomplete";
+              if ($row['status'] === 'Failed' || $noCount >= 7) {
+                 $status = "Failed";
+                 $statusClass = "failed";
+              }
+              // --- NEW: compute score (each "Yes" = 10 points) ---
+              $score = 0;
+              for ($i = 1; $i <= 10; $i++) {
+                 $ans = strtolower(trim($row["q{$i}"] ?? ''));
+                 if ($ans === 'yes') $score += 10;
+              }
+              $scoreLabel = $score . " / 100";
 
-$questions = [
-   "Adheres to schedule and login time",
-   "Follows proper call handling procedures",
-   "Demonstrates product knowledge",
-   "Maintains professional tone",
-   "Uses appropriate language",
-   "Accurate documentation",
-   "Customer empathy and support",
-   "Problem resolution effectiveness",
-   "Compliance with company policy",
-   "Follows QA guidelines"
-];
-
-if ($result->num_rows > 0) {
-   while($row = $result->fetch_assoc()) {
-      // Determine status
-      $completed = true;
-      $noCount = 0;
-      for ($i = 1; $i <= 10; $i++) {
-         $ans = $row["q$i"];
-         if ($ans === null || $ans === '') $completed = false;
-         if (strtolower($ans) === "no") $noCount++;
-      }
-      $status = $completed ? "Completed" : "Incomplete";
-      $statusClass = $completed ? "completed" : "incomplete";
-      if ($row['status'] === 'Failed' || $noCount >= 7) {
-         $status = "Failed";
-         $statusClass = "failed";
-      }
-      // --- NEW: compute score (each "Yes" = 10 points) ---
-      $score = 0;
-      for ($i = 1; $i <= 10; $i++) {
-         $ans = strtolower(trim($row["q{$i}"] ?? ''));
-         if ($ans === 'yes') $score += 10;
-      }
-      $scoreLabel = $score . " / 100";
-
-      if ($score >= 90) {
-         $scoreClass = "audit-status completed";
-      } elseif ($score >= 75) {
-         $scoreClass = "audit-status incomplete";
-      } elseif ($score >= 50) {
-         $scoreClass = "audit-status incomplete";
-      } else {
-         $scoreClass = "audit-status failed";
-      }
-      $cardId = "auditq-" . $row['id'];
+              // choose a badge class for score display (reuse existing classes)
+              if ($score >= 90) {
+                 $scoreClass = "audit-status completed";
+              } elseif ($score >= 75) {
+                 $scoreClass = "audit-status incomplete";
+              } elseif ($score >= 50) {
+                 $scoreClass = "audit-status incomplete";
+              } else {
+                 $scoreClass = "audit-status failed";
+              }
+              $cardId = "auditq-" . $row['id'];
 ?>
       <div class="audit-card collapsed" id="card-<?php echo $row['id']; ?>">
          <div class="audit-header" style="position:relative;">
@@ -452,6 +497,11 @@ if ($result->num_rows > 0) {
                <label>Score:</label>
                <span class="<?php echo $scoreClass; ?>"><?php echo $scoreLabel; ?></span>
             </div>
+            <!-- Delete button stays at the top right -->
+            <div class="audit-actions">
+               <a href='../../conditions/delete.php?id=<?php echo $row['id']; ?>'
+                  onclick="return confirm('Are you sure you want to delete this record?');">Delete</a>
+            </div>
          </div>
          <!-- Hide Queue when collapsed, show only when expanded -->
          <div class="audit-meta" style="display:none;"></div>
@@ -478,6 +528,7 @@ if ($result->num_rows > 0) {
                      <td style='font-weight:700; text-align:center;'>$point</td>
                   </tr>";
                }
+               // show total row
                echo "<tr style='background:#f5f7fb;'>
                        <td style='font-weight:800;'>Total</td>
                        <td></td>
@@ -488,28 +539,14 @@ if ($result->num_rows > 0) {
          </table>
          <div class="audit-comments">
             <strong>Comments:</strong> <?php echo htmlspecialchars($row['comment']); ?>
-            <?php
-            // Show supervisor comments for this audit
-            $supComRes = $conn->query("SELECT comment, status, created_at FROM supervisor_comments WHERE audit_id=" . intval($row['id']));
-            if ($supComRes && $supComRes->num_rows > 0) {
-                while ($sc = $supComRes->fetch_assoc()) {
-                    $statusColor = $sc['status'] === 'approved' ? '#43a047' : ($sc['status'] === 'disapproved' ? '#e53935' : '#ffa000');
-                    echo "<div style='margin-top:0.7rem; background:#fffbe7; border-radius:0.5rem; padding:0.6rem 1rem; font-size:0.98rem;'>
-                        <strong>Supervisor:</strong> " . htmlspecialchars($sc['comment']) . "
-                        <span style='margin-left:1rem; color:$statusColor; font-weight:600;'>[" . ucfirst($sc['status']) . "]</span>
-                        <span style='margin-left:1rem; color:#888; font-size:0.95rem;'>" . htmlspecialchars($sc['created_at']) . "</span>
-                    </div>";
-                }
-            }
-            ?>
          </div>
       </div>
 <?php
-   }
-} else {
-   echo "<div style='color:#888; font-size:1.1rem; text-align:center; margin-top:2rem;'>No audit reports found.</div>";
-}
-?>
+          }
+      } else {
+          echo "<div style='color:#888;'>No audit reports found.</div>";
+      }
+      ?>
    </div>
 </main>
 
